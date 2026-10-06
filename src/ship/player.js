@@ -88,12 +88,12 @@ export function hud() {
   }
 
   if (on && INT.near && !INT.grab) {
-    pr.textContent = (INT.near.t === 'ladder' ? 'Usar [E] · ' : 'Pegar [E] · ') + INT.near.label;
+    pr.textContent = INT.near.label;
   }
 
   if (on && INT.grab) {
     const it = INT.grab;
-    gl.textContent = it.label + ' · [E] soltar · [Q] Ordens do Capitão';
+    gl.textContent = it.label;
     gg.classList.toggle('r', it.t !== 'hoist' && it.t !== 'anchor');
     gg.classList.toggle('lim', INT.limHit);
 
@@ -101,21 +101,21 @@ export function hud() {
       const t = it.sail.t;
       gf.style.left = '0';
       gf.style.width = t * 100 + '%';
-      gv.textContent = Math.round(t * 100) + '% aberta · puxe (S / mouse p/ baixo) para abrir';
+      gv.textContent = Math.round(t * 100) + '% Aberta';
     } else if (it.t === 'anchor') {
       gf.style.left = '0';
       gf.style.width = (AN.hold > 0 ? AN.hold / 2 : AN.d) * 100 + '%';
-      gv.textContent = AN.hold > 0 ? 'Segure S… lançando' : AN.d < .05 && AN.t < .5 ? 'Recolhida · segure S ~2 s para lançar' : (AN.set ? 'Fundeado' : Math.round(AN.d * 100) + '% lançada') + ' · segure W para içar';
+      gv.textContent = AN.hold > 0 ? 'Lançando...' : AN.d < .05 && AN.t < .5 ? 'Recolhida' : (AN.set ? 'Fundeada' : Math.round(AN.d * 100) + '% Lançada');
     } else if (it.t === 'helm') {
       const t = HM.t;
       gf.style.left = (t < 0 ? 50 + 50 * t : 50) + '%';
       gf.style.width = Math.abs(t) * 50 + '%';
-      gv.textContent = Math.round(Math.abs(t) * 100) + '% ' + (t > .02 ? 'a estibordo' : t < -.02 ? 'a bombordo' : 'reto') + ' · A/D (ou joystick) · mouse olha livre';
+      gv.textContent = Math.round(Math.abs(t) * 100) + '% ' + (t > .02 ? 'Estibordo' : t < -.02 ? 'Bombordo' : 'Reto');
     } else {
       const t = it.rg.t / it.rg.lim;
       gf.style.left = (t < 0 ? 50 + 50 * t : 50) + '%';
       gf.style.width = Math.abs(t) * 50 + '%';
-      gv.textContent = Math.round(it.rg.t / D2) + '° (limite ±' + Math.round(it.rg.lim / D2) + '°) · A/D ou mouse';
+      gv.textContent = Math.round(it.rg.t / D2) + '°';
     }
   }
 }
@@ -197,7 +197,7 @@ export function updInter(dt, rows, SL, rrows, hlm) {
     let ld = null;
     if (Math.abs(fp.z) < .8 && Math.abs(fp.x) > 1.1 && fp.y < .6) {
       const s = fp.x < 0 ? -1 : 1;
-      ld = { t: 'ladder', s, pos: new T.Vector3(s * 2, 1, 0), label: 'Escada de cordas · descer' };
+      ld = { t: 'ladder', s, pos: new T.Vector3(s * 2, 1, 0), label: 'Escada de cordas' };
     }
     INT.near = ld || b;
   }
@@ -395,7 +395,7 @@ export function updClimb(dt) {
   }
   cam.position.set(fp.x, fp.y + 1.65, fp.z);
   cam.rotation.set(fp.pit, fp.yaw, 0);
-  if (PL.m === 'climb') hudMode('Escada · W/S sobe e desce · Espaço solta'); else hud();
+  if (PL.m === 'climb') hudMode('Escada'); else hud();
 }
 
 export function updSwim(dt) {
@@ -477,10 +477,10 @@ export function updSwim(dt) {
   cam.rotation.set(fp.pit, fp.yaw, 0);
 
   const msg = lad
-    ? 'Subir pela escada [E]'
+    ? 'Escada [E]'
     : curTerH >= ILHAS.SEA
-      ? 'Na ilha · explore a terra firme · V volta ao convés'
-      : 'Na água · nade até a ilha ou escada · V volta ao convés';
+      ? 'Na ilha'
+      : 'Na água';
 
   hudMode(msg, lad ? 'Escada' : null);
 }

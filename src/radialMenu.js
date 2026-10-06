@@ -429,11 +429,11 @@ function renderRadialMenu() {
     const cur = items[selectedIndex];
     if (hubIcon) hubIcon.textContent = cur.icon || '⚓';
     if (hubText) hubText.textContent = cur.label || 'ORDEM';
-    if (hubDesc) hubDesc.textContent = cur.desc || 'Solte o Joycon para executar';
+    if (hubDesc) hubDesc.textContent = cur.desc || '';
   } else {
     if (hubIcon) hubIcon.textContent = activeMenu === 'main' ? '⚓' : '↩';
-    if (hubText) hubText.textContent = activeMenu === 'main' ? 'ORDENS DO CAPITÃO' : 'VOLTAR';
-    if (hubDesc) hubDesc.textContent = 'Gire em 360° e solte';
+    if (hubText) hubText.textContent = activeMenu === 'main' ? 'ORDENS' : 'VOLTAR';
+    if (hubDesc) hubDesc.textContent = '';
   }
 }
 
