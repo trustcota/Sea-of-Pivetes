@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { clamp, wrapA } from './core/math.js';
 import { R, sc, cam, cv } from './core/renderer.js';
-import { S, WI, ST, SEAS, CAM, UIS, FX, FL, AN, INT, fp, keys, joy, lk } from './core/state.js';
+import { S, WI, ST, SEAS, CAM, UIS, FX, FL, AN, INT, fp, keys, joy, lk, GAME } from './core/state.js';
 import { setWaveDir, H, updSea } from './world/ocean.js';
 import { ILHAS } from './world/archipelago.js';
 import { updExtras, updSpeedFx, vn, updSun, updAtmosphere } from './world/weather.js';
@@ -18,11 +18,75 @@ const so2 = (x, v, tg, w, z, dt) => {
   return [x + v * dt, v];
 };
 
+// Variáveis e vetores de interpolação da transição para FPV
+let transStart = 0;
+const TRANS_DURATION = 0.8; // Transição rápida de 0.8s sincronizada com o fade-out do menu
+const startCamPos = new THREE.Vector3();
+const startCamQuat = new THREE.Quaternion();
+const targetWorldPos = new THREE.Vector3();
+const targetWorldQuat = new THREE.Quaternion();
+const dummyHead = new THREE.Object3D();
+dummyHead.rotation.order = 'YXZ';
+
+export function startPlayTransition() {
+  if (GAME.state !== 'MENU') return;
+  GAME.state = 'TRANSITION';
+  GAME.canControl = false;
+
+  // Fade out na tela inicial
+  const titleScreen = document.getElementById('title-screen');
+  if (titleScreen) {
+    titleScreen.classList.add('fade-out');
+  }
+
+  // Desativa interação do jogador e travas de ponteiro
+  INT.grab = null;
+  INT.near = null;
+  INT.tHold = INT.tFree = INT.tJump = INT.tDec = INT.tInc = false;
+  for (const k in keys) keys[k] = 0;
+  joy.id = lk.id = -1;
+  joy.dx = joy.dy = 0;
+
+  // Garante que a câmera está no cenário global para interpolação limpa
+  sc.add(cam);
+  cam.rotation.order = 'XYZ';
+  startCamPos.copy(cam.position);
+  startCamQuat.copy(cam.quaternion);
+  transStart = performance.now();
+}
+
+export function returnToMenu() {
+  GAME.state = 'MENU';
+  GAME.canControl = false;
+  CAM.fpv = false;
+  CAM.auto = true;
+  setFpv(false);
+  CAM.dist = 28;
+  CAM.pit = 0.22;
+  CAM.yaw = 0.8;
+
+  const titleScreen = document.getElementById('title-screen');
+  if (titleScreen) {
+    titleScreen.style.display = 'flex';
+    titleScreen.classList.remove('fade-out');
+  }
+
+  const ingameBtn = document.getElementById('btn-ingame-menu');
+  if (ingameBtn) ingameBtn.style.display = 'none';
+
+  document.querySelectorAll('.in-game-hud').forEach(el => el.classList.add('game-hud-hidden'));
+}
+
 // Câmera orbital, FPV e controles de toque do ponteiro com joystick visual
+const isTouchCapable = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.matchMedia("(pointer: coarse)").matches;
+if (isTouchCapable) {
+  document.body.classList.add('touch-device');
+}
+
 const joyBase = document.getElementById('joy-base');
 const joyKnob = document.getElementById('joy-knob');
 const showJoystick = (x, y) => {
-  if (joyBase) {
+  if (joyBase && isTouchCapable) {
     joyBase.style.left = x + 'px';
     joyBase.style.top = y + 'px';
     joyBase.style.display = 'block';
@@ -39,8 +103,17 @@ const hideJoystick = () => {
 };
 
 cv.onpointerdown = e => {
-  if (CAM.fpv && e.pointerType !== 'mouse') {
-    if (e.clientX < window.innerWidth * .4 && joy.id < 0) {
+  if (GAME.state === 'MENU') {
+    CAM.drag = true;
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    return;
+  }
+  if (GAME.state === 'TRANSITION' || !GAME.canControl) {
+    return;
+  }
+  const isTouch = e.pointerType !== 'mouse' || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  if (CAM.fpv && isTouch) {
+    if (e.clientX < window.innerWidth * 0.5 && joy.id < 0) {
       joy.id = e.pointerId;
       joy.x0 = e.clientX;
       joy.y0 = e.clientY;
@@ -57,7 +130,8 @@ cv.onpointerdown = e => {
   }
   try { cv.setPointerCapture(e.pointerId); } catch (_) {}
 };
-cv.onpointerup = cv.onpointercancel = e => {
+
+window.addEventListener('pointerup', e => {
   CAM.drag = false;
   if (e.pointerId === joy.id) {
     joy.id = -1;
@@ -67,8 +141,29 @@ cv.onpointerup = cv.onpointercancel = e => {
   if (e.pointerId === lk.id) {
     lk.id = -1;
   }
-};
-cv.onpointermove = e => {
+});
+
+window.addEventListener('pointercancel', e => {
+  CAM.drag = false;
+  if (e.pointerId === joy.id) {
+    joy.id = -1;
+    joy.dx = joy.dy = 0;
+    hideJoystick();
+  }
+  if (e.pointerId === lk.id) {
+    lk.id = -1;
+  }
+});
+
+window.addEventListener('pointermove', e => {
+  if (GAME.state === 'MENU') {
+    if (CAM.drag) {
+      CAM.yaw -= e.movementX * .006;
+      CAM.pit = clamp(CAM.pit + e.movementY * .004, .02, 1.15);
+    }
+    return;
+  }
+  if (GAME.state === 'TRANSITION' || !GAME.canControl) return;
   if (CAM.fpv) {
     if (e.pointerId === joy.id) {
       joy.dx = clamp((e.clientX - joy.x0) / 50, -1, 1);
@@ -98,14 +193,19 @@ cv.onpointermove = e => {
     CAM.yaw -= e.movementX * .006;
     CAM.pit = clamp(CAM.pit + e.movementY * .004, .02, 1.15);
   }
-};
+});
 cv.onwheel = e => {
-  CAM.dist = clamp(CAM.dist + e.deltaY * .03, 10, 70);
-  e.preventDefault();
+  if (GAME.state === 'MENU' || !CAM.fpv) {
+    CAM.dist = clamp(CAM.dist + e.deltaY * .03, 10, 70);
+    e.preventDefault();
+  }
 };
 
 // Inicializa a interface e captura refs para o loop
-const ui = setupUI();
+const ui = setupUI({
+  onPlay: startPlayTransition,
+  onReturnMenu: returnToMenu
+});
 const { rows, SL, rrows, hlm, btn, stx, mapTick } = ui;
 
 let last = 0;
@@ -156,8 +256,50 @@ function loop(now) {
   ship.rotation.set(pt, ST.hd, rl + ST.heel);
   fl.rotation.y = FL.a + Math.sin(SEAS.wt * 3) * (.12 + .2 * clamp(WI.wsp / 14, 0, 1));
 
-  // Câmera FPV ou Orbital
-  if (CAM.fpv) {
+  // Câmera FPV, Orbital ou Transição
+  if (GAME.state === 'MENU') {
+    // Menu: rotação lenta e suave ao redor do galeão
+    if (!CAM.drag && CAM.auto) CAM.yaw += dt * .04;
+    const cx = Math.sin(CAM.yaw) * Math.cos(CAM.pit) * CAM.dist;
+    const cz = Math.cos(CAM.yaw) * Math.cos(CAM.pit) * CAM.dist;
+    cam.position.set(cx, Math.max(2.5 + Math.sin(CAM.pit) * CAM.dist, H(cx + ST.px, cz + ST.pz) + 2), cz);
+    cam.lookAt(0, 4.2, 0);
+    cam.rotateZ(Math.sin(now * .0008) * .035 * s);
+  } else if (GAME.state === 'TRANSITION') {
+    const elapsed = (now - transStart) / 1000;
+    const t = Math.min(elapsed / TRANS_DURATION, 1);
+    // Curva cúbica suave (ease-in-out)
+    const ease = t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+    // Converte posição dos olhos do jogador para o espaço global
+    targetWorldPos.set(fp.x, fp.y + 1.65, fp.z);
+    ship.localToWorld(targetWorldPos);
+
+    // Converte orientação FPV para o espaço global
+    dummyHead.rotation.set(fp.pit, fp.yaw, 0);
+    dummyHead.position.set(fp.x, fp.y + 1.65, fp.z);
+    dummyHead.updateMatrix();
+    const worldMat = ship.matrixWorld.clone().multiply(dummyHead.matrix);
+    targetWorldQuat.setFromRotationMatrix(worldMat);
+
+    cam.position.lerpVectors(startCamPos, targetWorldPos, ease);
+    cam.quaternion.slerpQuaternions(startCamQuat, targetWorldQuat, ease);
+
+    if (t >= 1) {
+      // Transição completamente concluída! Ativa o FPV
+      GAME.state = 'PLAY';
+      GAME.canControl = true;
+      setFpv(true);
+
+      const titleScreen = document.getElementById('title-screen');
+      if (titleScreen) titleScreen.style.display = 'none';
+
+      document.querySelectorAll('.in-game-hud').forEach(el => el.classList.remove('game-hud-hidden'));
+
+      const ingameBtn = document.getElementById('btn-ingame-menu');
+      if (ingameBtn) ingameBtn.style.display = 'flex';
+    }
+  } else if (CAM.fpv) {
     updFPV(dt, rows, SL, rrows, hlm);
   } else {
     if (!CAM.drag && CAM.auto) CAM.yaw += dt * .04;
@@ -189,8 +331,22 @@ function loop(now) {
   R.render(sc, cam);
 }
 
-// Inicialização de partida
-setFpv(true);
+// Inicialização no Menu Inicial com câmera livre orbitando
+GAME.state = 'MENU';
+GAME.canControl = false;
+CAM.fpv = false;
+CAM.auto = true;
+CAM.dist = 28;
+CAM.pit = 0.22;
+CAM.yaw = 0.8;
+sc.add(cam);
+cam.rotation.order = 'XYZ';
+cam.near = .5;
+cam.updateProjectionMatrix();
+
+// Oculta HUD de jogo enquanto estiver no menu
+document.querySelectorAll('.in-game-hud').forEach(el => el.classList.add('game-hud-hidden'));
+
 const mn = document.getElementById('mn');
 if (mn) mn.onclick();
 

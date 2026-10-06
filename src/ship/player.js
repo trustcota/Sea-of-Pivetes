@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { clamp, wrapA, D2 } from '../core/math.js';
 import { GC } from '../core/palettes.js';
 import { sc, cam, cv } from '../core/renderer.js';
-import { ST, INT, PL, CAM, AN, HM, fp, keys, joy, lk } from '../core/state.js';
+import { ST, INT, PL, CAM, AN, HM, fp, keys, joy, lk, GAME } from '../core/state.js';
 import { H } from '../world/ocean.js';
 import { ILHAS } from '../world/archipelago.js';
 import { SH } from './ship.js';
@@ -23,23 +23,23 @@ const E$ = id => document.getElementById(id);
 export const pr = E$('pr'), gg = E$('gg'), gl = E$('gl'), gf = E$('gf'), gv = E$('gv'), gb = E$('gb'), gq = E$('gq'), gj = E$('gj'), gdec = E$('gdec'), ginc = E$('ginc');
 
 if (gb) {
-  gb.onpointerdown = e => { INT.tHold = true; try { gb.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); };
+  gb.onpointerdown = e => { if (!GAME.canControl) return; INT.tHold = true; try { gb.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); };
   gb.onpointerup = gb.onpointercancel = () => { INT.tHold = false; };
 }
 if (gj) {
-  gj.onpointerdown = e => { INT.tJump = true; try { gj.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); };
+  gj.onpointerdown = e => { if (!GAME.canControl) return; INT.tJump = true; try { gj.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); };
   gj.onpointerup = gj.onpointercancel = () => { INT.tJump = false; };
 }
 if (gq) {
-  gq.onpointerdown = e => { INT.tFree = true; try { gq.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); };
+  gq.onpointerdown = e => { if (!GAME.canControl) return; INT.tFree = true; try { gq.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); };
   gq.onpointerup = gq.onpointercancel = () => { INT.tFree = false; };
 }
 if (gdec) {
-  gdec.onpointerdown = e => { INT.tDec = true; try { gdec.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); };
+  gdec.onpointerdown = e => { if (!GAME.canControl) return; INT.tDec = true; try { gdec.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); };
   gdec.onpointerup = gdec.onpointercancel = () => { INT.tDec = false; };
 }
 if (ginc) {
-  ginc.onpointerdown = e => { INT.tInc = true; try { ginc.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); };
+  ginc.onpointerdown = e => { if (!GAME.canControl) return; INT.tInc = true; try { ginc.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); };
   ginc.onpointerup = ginc.onpointercancel = () => { INT.tInc = false; };
 }
 
@@ -48,8 +48,18 @@ export function qD() {
 }
 
 export function hud() {
-  const on = CAM.fpv;
+  const on = CAM.fpv && GAME.canControl && GAME.state === 'PLAY';
   if (!gb) return;
+  if (!on) {
+    if (gb) gb.classList.remove('on');
+    if (gj) gj.classList.remove('on');
+    if (pr) pr.classList.remove('on');
+    if (gq) gq.classList.remove('on');
+    if (gg) gg.classList.remove('on');
+    if (gdec) gdec.classList.remove('on');
+    if (ginc) ginc.classList.remove('on');
+    return;
+  }
   gb.textContent = INT.grab ? 'Soltar' : (INT.near && INT.near.t === 'ladder' ? 'Escada' : 'Pegar');
   gj.textContent = 'Pular';
   gj.classList.toggle('on', on && !INT.grab);
@@ -363,6 +373,7 @@ export function dropLadder(push) {
 }
 
 export function updClimb(dt) {
+  if (!GAME.canControl) return;
   const lad = SH.lad, E = SH.walk.edge, s = PL.s;
   eEdge();
   const btnVal = (INT.tInc ? 1 : 0) - (INT.tDec ? 1 : 0);
@@ -386,6 +397,7 @@ export function updClimb(dt) {
 }
 
 export function updSwim(dt) {
+  if (!GAME.canControl) return;
   const sh = SH.ship, WK = SH.walk;
   sh.updateMatrixWorld(true);
   let f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - joy.dy,
@@ -444,6 +456,7 @@ export function updSwim(dt) {
 }
 
 export function updFPV(dt, rows, SL, rrows, hlm) {
+  if (!GAME.canControl) return;
   if (PL.m === 'swim') return updSwim(dt);
   if (PL.m === 'climb') return updClimb(dt);
 

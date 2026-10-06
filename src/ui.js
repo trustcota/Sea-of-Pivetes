@@ -1,5 +1,5 @@
 import { clamp, D2, wrapA } from './core/math.js';
-import { S, WI, ST, CAM, UIS, HM, AN, INT, keys } from './core/state.js';
+import { S, WI, ST, CAM, UIS, HM, AN, INT, keys, GAME } from './core/state.js';
 import { setFpv, resetPlayer } from './ship/player.js';
 import { SH } from './ship/ship.js';
 import { ILHAS } from './world/archipelago.js';
@@ -7,10 +7,278 @@ import { ILHAS } from './world/archipelago.js';
 export const degN = r => ((Math.round(r / D2) % 360) + 360) % 360;
 export const potName = g => g < 30 ? 'de popa' : g < 80 ? 'alheta' : g < 110 ? 'través' : g < 155 ? 'bolina' : 'de proa';
 
-export function setupUI() {
+export function setupUI(actions = {}) {
   const $ = id => document.getElementById(id);
+
+  // Botões da Tela Inicial e Modais
+  const btnPlay = $('btn-play');
+  if (btnPlay) {
+    btnPlay.onclick = () => {
+      if (actions.onPlay) actions.onPlay();
+    };
+  }
+
+  const settingsModal = $('settings-modal');
+  const controlsModal = $('controls-modal');
+  const btnSettings = $('btn-settings');
+  const btnIngameMenu = $('btn-ingame-menu');
+  const btnCloseSettings = $('btn-close-settings');
+  const btnSaveSettings = $('btn-save-settings');
+  const btnReturnMenu = $('btn-return-menu');
+  const returnRow = $('settings-menu-return-row');
+
+  const btnControls = $('btn-controls');
+  const btnCloseControls = $('btn-close-controls');
+  const btnConfirmControls = $('btn-confirm-controls');
+
+  const modalSeaBtns = [...document.querySelectorAll('button[data-modal-sea]')];
+  const modalVdBtns = [...document.querySelectorAll('button[data-modal-vd]')];
+
+  function syncSettingsModal() {
+    const modalSl = $('modal-sl'), modalSlVal = $('modal-sl-val');
+    if (modalSl) modalSl.value = Math.round(S.t * 100);
+    if (modalSlVal) modalSlVal.textContent = Math.round(S.t * 100) + '%';
+
+    const modalWsl = $('modal-wsl'), modalWslVal = $('modal-wsl-val');
+    if (modalWsl) modalWsl.value = Math.round(WI.str * 100);
+    if (modalWslVal) modalWslVal.textContent = Math.round(WI.str * 100) + '%';
+
+    const modalWdr = $('modal-wdr'), modalWdrVal = $('modal-wdr-val');
+    if (modalWdr) {
+      modalWdr.value = degN(WI.dir);
+      if (modalWdrVal) modalWdrVal.textContent = degN(WI.dir) + '°';
+    }
+
+    modalSeaBtns.forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.modalSea - S.t) < 0.05));
+    const curVd = ILHAS.vd();
+    modalVdBtns.forEach(b => b.classList.toggle('on', +b.dataset.modalVd === curVd));
+
+    // Sincroniza controles do arquipélago
+    const modalGh = $('modal-mapa-gh'), modalGhVal = $('modal-mapa-gh-val');
+    const origGh = $('mapa-gh');
+    if (modalGh && origGh) {
+      modalGh.value = origGh.value;
+      if (modalGhVal) modalGhVal.textContent = origGh.value;
+    }
+
+    const modalGd = $('modal-mapa-gd'), modalGdVal = $('modal-mapa-gd-val');
+    const origGd = $('mapa-gd');
+    if (modalGd && origGd) {
+      modalGd.value = origGd.value;
+      if (modalGdVal) modalGdVal.textContent = origGd.value;
+    }
+
+    const modalGs = $('modal-mapa-gs'), modalGsVal = $('modal-mapa-gs-val');
+    const origGs = $('mapa-gs');
+    if (modalGs && origGs) {
+      modalGs.value = origGs.value;
+      if (modalGsVal) modalGsVal.textContent = origGs.value;
+    }
+
+    const modalGn = $('modal-mapa-gn'), modalGnVal = $('modal-mapa-gn-val');
+    const origGn = $('mapa-gn');
+    if (modalGn && origGn) {
+      modalGn.value = origGn.value;
+      if (modalGnVal) modalGnVal.textContent = origGn.value;
+    }
+
+    const modalAu = $('modal-mapa-au'), origAu = $('mapa-au');
+    if (modalAu && origAu) {
+      modalAu.classList.toggle('on', origAu.classList.contains('on'));
+    }
+
+    const modalAr = $('modal-ar'), origAr = $('ar');
+    if (modalAr && origAr) {
+      modalAr.classList.toggle('on', origAr.classList.contains('on'));
+    }
+
+    const modalWf = $('modal-wf'), origWf = $('wf');
+    if (modalWf && origWf) {
+      modalWf.classList.toggle('on', origWf.classList.contains('on'));
+    }
+  }
+
+  const openSettings = () => {
+    if (settingsModal) {
+      settingsModal.style.display = 'flex';
+      if (returnRow) returnRow.style.display = GAME.state === 'PLAY' ? 'block' : 'none';
+      syncSettingsModal();
+    }
+  };
+  const closeSettings = () => {
+    if (settingsModal) settingsModal.style.display = 'none';
+  };
+
+  if (btnSettings) btnSettings.onclick = openSettings;
+  if (btnIngameMenu) btnIngameMenu.onclick = openSettings;
+  if (btnCloseSettings) btnCloseSettings.onclick = closeSettings;
+  if (btnSaveSettings) btnSaveSettings.onclick = closeSettings;
+
+  if (btnReturnMenu) {
+    btnReturnMenu.onclick = () => {
+      closeSettings();
+      if (actions.onReturnMenu) actions.onReturnMenu();
+    };
+  }
+
+  const openControls = () => { if (controlsModal) controlsModal.style.display = 'flex'; };
+  const closeControls = () => { if (controlsModal) controlsModal.style.display = 'none'; };
+  if (btnControls) btnControls.onclick = openControls;
+  if (btnCloseControls) btnCloseControls.onclick = closeControls;
+  if (btnConfirmControls) btnConfirmControls.onclick = closeControls;
+
+  // Sincronização dos controles dentro do modal de Ajustes
+  modalSeaBtns.forEach(b => b.onclick = () => {
+    S.t = +b.dataset.modalSea;
+    const sl = $('sl');
+    if (sl) sl.value = S.t * 100;
+    setWindStr(.12 + .85 * S.t);
+    syncSettingsModal();
+  });
+
+  const modalSl = $('modal-sl');
+  if (modalSl) {
+    modalSl.oninput = () => {
+      S.t = modalSl.value / 100;
+      const sl = $('sl');
+      if (sl) sl.value = modalSl.value;
+      setWindStr(.12 + .85 * S.t);
+      const valEl = $('modal-sl-val');
+      if (valEl) valEl.textContent = modalSl.value + '%';
+      modalSeaBtns.forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.modalSea - S.t) < 0.05));
+    };
+  }
+
+  const modalWsl = $('modal-wsl');
+  if (modalWsl) {
+    modalWsl.oninput = () => {
+      WI.str = modalWsl.value / 100;
+      const wsl = $('wsl');
+      if (wsl) wsl.value = modalWsl.value;
+      const valEl = $('modal-wsl-val');
+      if (valEl) valEl.textContent = modalWsl.value + '%';
+    };
+  }
+
+  [['modal-w0', 0], ['modal-w1', Math.PI / 2], ['modal-w2', Math.PI * .62]].forEach(([id, o]) => {
+    const el = $(id);
+    if (el) el.onclick = () => { WI.dir = ST.hd + o; showDir(); };
+  });
+
+  modalVdBtns.forEach(b => b.onclick = () => {
+    setMapVD(+b.dataset.modalVd);
+    modalVdBtns.forEach(x => x.classList.toggle('on', x === b));
+  });
+
   const anb = $('an');
   if (anb) anb.onclick = () => { AN.t = AN.t > .5 ? 0 : 1; };
+
+  // Vincula controles avançados do painel de Ajustes aos elementos da simulação
+  const modalWdr = $('modal-wdr');
+  if (modalWdr) {
+    modalWdr.oninput = () => {
+      WI.dir = modalWdr.value * D2;
+      const wdr = $('wdr');
+      if (wdr) wdr.value = modalWdr.value;
+      const wdv = $('wdv');
+      if (wdv) wdv.textContent = modalWdr.value + '°';
+      const valEl = $('modal-wdr-val');
+      if (valEl) valEl.textContent = modalWdr.value + '°';
+    };
+  }
+
+  const modalGh = $('modal-mapa-gh');
+  if (modalGh) {
+    modalGh.oninput = () => {
+      const origGh = $('mapa-gh');
+      if (origGh) {
+        origGh.value = modalGh.value;
+        origGh.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const valEl = $('modal-mapa-gh-val');
+      if (valEl) valEl.textContent = modalGh.value;
+    };
+  }
+
+  const modalGd = $('modal-mapa-gd');
+  if (modalGd) {
+    modalGd.oninput = () => {
+      const origGd = $('mapa-gd');
+      if (origGd) {
+        origGd.value = modalGd.value;
+        origGd.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const valEl = $('modal-mapa-gd-val');
+      if (valEl) valEl.textContent = modalGd.value;
+    };
+  }
+
+  const modalGs = $('modal-mapa-gs');
+  if (modalGs) {
+    modalGs.oninput = () => {
+      const origGs = $('mapa-gs');
+      if (origGs) {
+        origGs.value = modalGs.value;
+        origGs.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const valEl = $('modal-mapa-gs-val');
+      if (valEl) valEl.textContent = modalGs.value;
+    };
+  }
+
+  const modalGn = $('modal-mapa-gn');
+  if (modalGn) {
+    modalGn.oninput = () => {
+      const origGn = $('mapa-gn');
+      if (origGn) {
+        origGn.value = modalGn.value;
+        origGn.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const valEl = $('modal-mapa-gn-val');
+      if (valEl) valEl.textContent = modalGn.value;
+    };
+  }
+
+  const modalNs = $('modal-mapa-ns');
+  if (modalNs) {
+    modalNs.onclick = () => {
+      const origNs = $('mapa-ns');
+      if (origNs) origNs.click();
+    };
+  }
+
+  const modalAu = $('modal-mapa-au');
+  if (modalAu) {
+    modalAu.onclick = () => {
+      const origAu = $('mapa-au');
+      if (origAu) {
+        origAu.click();
+        modalAu.classList.toggle('on', origAu.classList.contains('on'));
+      }
+    };
+  }
+
+  const modalAr = $('modal-ar');
+  if (modalAr) {
+    modalAr.onclick = () => {
+      const origAr = $('ar');
+      if (origAr) {
+        origAr.click();
+        modalAr.classList.toggle('on', origAr.classList.contains('on'));
+      }
+    };
+  }
+
+  const modalWf = $('modal-wf');
+  if (modalWf) {
+    modalWf.onclick = () => {
+      const origWf = $('wf');
+      if (origWf) {
+        origWf.click();
+        modalWf.classList.toggle('on', origWf.classList.contains('on'));
+      }
+    };
+  }
 
   // Controles de clima e vento
   const btn = [...document.querySelectorAll('button[data-s]')];
@@ -134,6 +402,14 @@ export function setupUI() {
 
   // Atalhos de teclado globais
   addEventListener('keydown', e => {
+    if (e.code === 'Escape') {
+      if (settingsModal && settingsModal.style.display !== 'none') { closeSettings(); return; }
+      if (controlsModal && controlsModal.style.display !== 'none') { closeControls(); return; }
+    }
+    if (GAME.state !== 'PLAY' || !GAME.canControl) {
+      if (e.code === 'KeyV' || e.code === 'Space' || e.code.indexOf('Arrow') === 0) e.preventDefault();
+      return;
+    }
     if (e.code === 'KeyV' && !e.repeat && e.target.tagName !== 'INPUT') setFpv(!CAM.fpv);
     keys[e.code] = 1;
     if (CAM.fpv && e.code.indexOf('Arrow') === 0) e.preventDefault();
@@ -143,6 +419,10 @@ export function setupUI() {
     }
   });
   addEventListener('keyup', e => {
+    if (GAME.state !== 'PLAY' || !GAME.canControl) {
+      keys[e.code] = 0;
+      return;
+    }
     keys[e.code] = 0;
     if (CAM.fpv && e.code === 'Space' && e.target.tagName !== 'INPUT') e.preventDefault();
   });

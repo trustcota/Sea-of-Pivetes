@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Galeão pirata no oceano</title>
+<title>Sea of Pivetes</title>
+<meta name="description" content="Sea of Pivetes - Galeão pirata navegando por um arquipélago procedural no oceano com Three.js">
+<meta property="og:title" content="Sea of Pivetes">
+<meta property="og:description" content="Navegação e exploração de galeão pirata em mares procedurais 3D">
 <meta name="theme-color" content="#111111" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -12,69 +15,273 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
 <link rel="icon" type="image/svg+xml" href="icon.svg" />
-<link rel="stylesheet" href="/src/styles.css">
+<link rel="stylesheet" href="./src/styles.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-<div id="ui">
-<h1>Galeão pirata no oceano</h1>
+<!-- Tela Inicial / Title Screen -->
+<div id="title-screen">
+  <div class="title-backdrop"></div>
+  <div class="title-content">
+    <div class="title-header-group">
+      <div class="title-emblem" aria-hidden="true">
+        <svg viewBox="0 0 100 100" width="70" height="70" class="helm-emblem-svg">
+          <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="3.5"/>
+          <circle cx="50" cy="50" r="14" fill="none" stroke="currentColor" stroke-width="3"/>
+          <line x1="50" y1="4" x2="50" y2="96" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+          <line x1="4" y1="50" x2="96" y2="50" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+          <line x1="17" y1="17" x2="83" y2="83" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+          <line x1="17" y1="83" x2="83" y2="17" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="50" cy="50" r="6" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="title-badge">EXPEDIÇÃO MARÍTIMA</div>
+      <h1 class="title-logo">Sea of Pivetes</h1>
+      <p class="title-subtitle">Galeão Pirata · Arquipélago Infinito · Navegação em Primeira Pessoa</p>
+    </div>
+    
+    <div class="title-actions">
+      <button id="btn-play" class="title-btn title-btn-play">
+        <span class="btn-play-icon">⚓</span>
+        <span>JOGAR</span>
+      </button>
+      <div class="title-btn-row">
+        <button id="btn-settings" class="title-btn title-btn-sub">
+          <span class="btn-icon">⚙</span>
+          <span>AJUSTES</span>
+        </button>
+        <button id="btn-controls" class="title-btn title-btn-sub">
+          <span class="btn-icon">📜</span>
+          <span>COMANDOS</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Botão no topo durante o jogo para abrir Ajustes -->
+<button id="btn-ingame-menu" class="ingame-menu-btn" title="Ajustes de navegação" style="display: none;">
+  <span>⚙</span>
+</button>
+
+<!-- Modal de Ajustes -->
+<div id="settings-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>Ajustes Náuticos</h2>
+      <button id="btn-close-settings" class="modal-close-btn" title="Fechar">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-group">
+        <label class="settings-label">Condição do Oceano</label>
+        <div class="settings-btn-grid">
+          <button class="opt-btn" data-modal-sea="0.04">Calmo</button>
+          <button class="opt-btn" data-modal-sea="0.5">Ondas</button>
+          <button class="opt-btn" data-modal-sea="1">Tempestade</button>
+        </div>
+      </div>
+      <div class="settings-group">
+        <div class="label-with-val">
+          <label for="modal-sl">Intensidade das Ondas</label>
+          <span id="modal-sl-val">4%</span>
+        </div>
+        <input id="modal-sl" type="range" min="0" max="100" value="4">
+      </div>
+      <div class="settings-group">
+        <div class="label-with-val">
+          <label for="modal-wsl">Força do Vento</label>
+          <span id="modal-wsl-val">15%</span>
+        </div>
+        <input id="modal-wsl" type="range" min="0" max="100" value="15">
+      </div>
+      <div class="settings-group">
+        <label class="settings-label">Direção Rápida do Vento</label>
+        <div class="settings-btn-grid">
+          <button id="modal-w0" class="opt-btn">Popa</button>
+          <button id="modal-w1" class="opt-btn">Través</button>
+          <button id="modal-w2" class="opt-btn">Bolina</button>
+        </div>
+      </div>
+      <div class="settings-group">
+        <div class="label-with-val">
+          <label for="modal-wdr">Direção do Vento (Fina)</label>
+          <span id="modal-wdr-val">26°</span>
+        </div>
+        <input id="modal-wdr" type="range" min="0" max="359" value="26">
+      </div>
+      <div class="settings-group">
+        <label class="settings-label">Alcance de Visão (Ilhas)</label>
+        <div class="settings-btn-grid">
+          <button class="opt-btn" data-modal-vd="2">Curto</button>
+          <button class="opt-btn" data-modal-vd="3">Médio</button>
+          <button class="opt-btn" data-modal-vd="4">Longo</button>
+        </div>
+      </div>
+      
+      <!-- Configurações do Arquipélago -->
+      <div class="settings-group" style="border-top: 1px dashed rgba(28,18,12,0.15); padding-top:10px;">
+        <label class="settings-label">Geração de Ilhas (Mapa)</label>
+        <div class="settings-btn-grid" style="grid-template-columns: 1fr 1fr;">
+          <button id="modal-mapa-ns" class="opt-btn">Nova Semente</button>
+          <button id="modal-mapa-au" class="opt-btn on">Render Auto</button>
+        </div>
+      </div>
+      <div class="settings-group">
+        <div class="label-with-val">
+          <label for="modal-mapa-gh">Altura das Ilhas</label>
+          <span id="modal-mapa-gh-val">4.6</span>
+        </div>
+        <input id="modal-mapa-gh" type="range" min="2" max="12" step="0.2" value="4.6">
+      </div>
+      <div class="settings-group">
+        <div class="label-with-val">
+          <label for="modal-mapa-gd">Profundidade do Oceano</label>
+          <span id="modal-mapa-gd-val">9</span>
+        </div>
+        <input id="modal-mapa-gd" type="range" min="3" max="20" step="1" value="9">
+      </div>
+      <div class="settings-group">
+        <div class="label-with-val">
+          <label for="modal-mapa-gs">Espaçamento de Ilhas</label>
+          <span id="modal-mapa-gs-val">140</span>
+        </div>
+        <input id="modal-mapa-gs" type="range" min="120" max="300" step="5" value="140">
+      </div>
+      <div class="settings-group">
+        <div class="label-with-val">
+          <label for="modal-mapa-gn">Densidade de Ilhas</label>
+          <span id="modal-mapa-gn-val">85</span>
+        </div>
+        <input id="modal-mapa-gn" type="range" min="40" max="100" step="5" value="85">
+      </div>
+
+      <!-- Opções Gráficas/Câmera -->
+      <div class="settings-group" style="border-top: 1px dashed rgba(28,18,12,0.15); padding-top:10px;">
+        <label class="settings-label">Opções Extras</label>
+        <div class="settings-btn-grid" style="grid-template-columns: 1fr 1fr;">
+          <button id="modal-ar" class="opt-btn on">Girar Câmera</button>
+          <button id="modal-wf" class="opt-btn">Mostrar Malha</button>
+        </div>
+      </div>
+      <div class="settings-group" id="settings-menu-return-row" style="display: none;">
+        <button id="btn-return-menu" class="danger-btn">⎋ Voltar à Tela Inicial</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="btn-save-settings" class="modal-btn-confirm">Concluir Ajustes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Comandos / Como Jogar -->
+<div id="controls-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>Comandos & Navegação</h2>
+      <button id="btn-close-controls" class="modal-close-btn" title="Fechar">✕</button>
+    </div>
+    <div class="modal-body controls-list">
+      <div class="ctrl-row">
+        <span class="ctrl-key">W · A · S · D</span>
+        <span class="ctrl-desc">Andar pelo navio / Nadar na água</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-key">Shift</span>
+        <span class="ctrl-desc">Correr pelo convés</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-key">Espaço</span>
+        <span class="ctrl-desc">Pular / Soltar da escada</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-key">Mouse</span>
+        <span class="ctrl-desc">Olhar 360° em primeira pessoa (FPV)</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-key">Tecla E</span>
+        <span class="ctrl-desc">Içar/recolher velas, segurar leme ou usar escada</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-key">A / D ou W / S</span>
+        <span class="ctrl-desc">Girar o leme ou regular as velas seguradas</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-key">Tecla Q</span>
+        <span class="ctrl-desc">Olhar livre sem soltar a corda ou o leme</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-key">Tecla V</span>
+        <span class="ctrl-desc">Alternar entre primeira pessoa e visão orbital</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-key">Esc</span>
+        <span class="ctrl-desc">Liberar o cursor do mouse</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="btn-confirm-controls" class="modal-btn-confirm">Entendido, Capitão!</button>
+    </div>
+  </div>
+</div>
+
+<div id="ui" class="in-game-hud">
+<h1>Sea of Pivetes</h1>
 <button id="mn" title="Minimizar painel">–</button>
 
 <!-- PWA Install Button -->
 <div id="pwa-install-container" style="display: none; margin: 12px 0;">
   <button id="pwa-install-btn" class="pwa-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--acc); color: white; font-weight: bold; border: 2px solid var(--line); padding: 8px; cursor: pointer; box-shadow: 2px 2px 0px 0px var(--line); font-family: inherit;">
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    Instalar no Dispositivo
+    Instalar
   </button>
 </div>
 
 <p id="st">Mar calmo</p>
 <div class="row"><button data-s="0.04">Calmo</button><button data-s="0.5">Ondas</button><button data-s="1">Tempestade</button></div>
-<label for="sl">Intensidade</label>
+<label for="sl">Ondas</label>
 <input id="sl" type="range" min="0" max="100" value="4">
 <label for="wsl">Força do vento</label>
 <input id="wsl" type="range" min="0" max="100" value="15">
-<label for="wdr">Direção do vento (sopra para <span id="wdv">26°</span>)</label>
+<label for="wdr">Vento: <span id="wdv">26°</span></label>
 <input id="wdr" type="range" min="0" max="359" value="26">
 <div class="row" style="margin-top:6px"><button id="w0">Popa</button><button id="w1">Través</button><button id="w2">Bolina</button></div>
-<label for="hlm">Leme (← bombordo · estibordo →)</label>
+<label for="hlm">Leme (Bombordo · Estibordo)</label>
 <input id="hlm" type="range" min="-100" max="100" value="0">
-<div class="row" style="grid-template-columns:1fr;margin-top:12px"><button id="fv">Entrar no navio (FPV)</button></div>
-<div class="row" style="grid-template-columns:1fr;margin-top:8px"><button id="tm">Modo teste (liberar painel)</button></div>
-<div class="row" style="grid-template-columns:1fr;margin-top:8px"><button id="an">Âncora: içada (lançar)</button></div>
-<div class="row two"><button id="ar" class="on">Girar sozinho</button><button id="wf">Malha do navio</button></div>
+<div class="row" style="grid-template-columns:1fr;margin-top:12px"><button id="fv">Entrar FPV</button></div>
+<div class="row" style="grid-template-columns:1fr;margin-top:8px"><button id="tm">Modo Teste</button></div>
+<div class="row" style="grid-template-columns:1fr;margin-top:8px"><button id="an">Lançar Âncora</button></div>
+<div class="row two"><button id="ar" class="on">Girar câmera</button><button id="wf">Girar malha</button></div>
 <label>Velas</label>
 <div class="row"><button id="up">Içar tudo</button><button id="md">Meia vela</button><button id="dn">Arriar</button></div>
-<label>Içar (cordas douradas)</label>
+<label>Içar (Cordas)</label>
 <div id="sls"></div>
-<label>Rotacionar (cordas vermelhas)</label>
+<label>Girar (Vergas)</label>
 <div id="rts"></div>
-<div class="row" style="grid-template-columns:1fr;margin-top:8px"><button id="ct">Centralizar velas</button></div>
-<label>Mapa · distância de renderização <b id="mapa-rgv">0 m</b></label>
+<div class="row" style="grid-template-columns:1fr;margin-top:8px"><button id="ct">Centralizar</button></div>
+<label>Mapa · Render: <b id="mapa-rgv">0 m</b></label>
 <input id="mapa-rg" type="range" min="2" max="20" step="1" value="2">
 <div class="row"><button data-vd="2" class="on">Curta</button><button data-vd="3">Média</button><button data-vd="4">Longa</button></div>
 <div class="row two" style="margin-top:6px"><button id="mapa-au" class="on">Auto</button><button id="mapa-ns">Nova semente</button></div>
-<label for="mapa-gh">Altura das ilhas <b id="mapa-ghv"></b></label>
+<label for="mapa-gh">Altura Ilhas <b id="mapa-ghv"></b></label>
 <input id="mapa-gh" type="range" min="2" max="12" step=".2" value="4.6">
-<label for="mapa-gd">Profundidade do oceano <b id="mapa-gdv"></b></label>
+<label for="mapa-gd">Profundidade <b id="mapa-gdv"></b></label>
 <input id="mapa-gd" type="range" min="3" max="20" step="1" value="9">
-<label for="mapa-gs">Distância entre ilhas <b id="mapa-gsv"></b></label>
+<label for="mapa-gs">Espaçamento <b id="mapa-gsv"></b></label>
 <input id="mapa-gs" type="range" min="120" max="300" step="5" value="140">
-<label for="mapa-gn">Densidade de ilhas <b id="mapa-gnv"></b></label>
+<label for="mapa-gn">Densidade <b id="mapa-gnv"></b></label>
 <input id="mapa-gn" type="range" min="40" max="100" step="5" value="85">
 </div>
-<div id="wh"><svg viewBox="0 0 100 100" width="88" height="88"><g id="whc" transform="translate(50 50)"><circle cx="0" cy="0" r="46" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="2"/><line x1="0" y1="-46" x2="0" y2="-40" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="0" y1="40" x2="0" y2="46" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="40" y1="0" x2="46" y2="0" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="-46" y1="0" x2="-40" y2="0" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><text x="0" y="-29" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#e5534b" style="user-select:none">N</text><text x="0" y="31" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">S</text><text x="31" y="1" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">L</text><text x="-31" y="1" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">O</text></g><path d="M50 26 L62 68 L50 61 L38 68 Z" fill="currentColor" fill-opacity=".8"/><g id="wha" transform="translate(50 50)"><line x1="0" y1="42" x2="0" y2="-4" style="stroke:var(--acc)" stroke-width="4" stroke-linecap="round"/><polygon points="0,-20 -9,-4 9,-4" style="fill:var(--acc)"/></g></svg><div id="wht"></div></div>
-<div id="pr"></div>
-<div id="gg"><div id="gl"></div><div class="bar"><i id="gf"></i><s></s></div><div id="gv"></div></div>
-<button id="gb">Pegar</button>
-<button id="gq">Olhar</button>
-<button id="gj">Pular</button>
-<button id="gdec">–</button>
-<button id="ginc">+</button>
-<div id="joy-base"><div id="joy-knob"></div></div>
-<div id="hint">Arraste para girar · role para aproximar</div>
+<div id="wh" class="in-game-hud"><svg viewBox="0 0 100 100" width="88" height="88"><g id="whc" transform="translate(50 50)"><circle cx="0" cy="0" r="46" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="2"/><line x1="0" y1="-46" x2="0" y2="-40" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="0" y1="40" x2="0" y2="46" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="40" y1="0" x2="46" y2="0" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="-46" y1="0" x2="-40" y2="0" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><text x="0" y="-29" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#e5534b" style="user-select:none">N</text><text x="0" y="31" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">S</text><text x="31" y="1" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">L</text><text x="-31" y="1" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">O</text></g><path d="M50 26 L62 68 L50 61 L38 68 Z" fill="currentColor" fill-opacity=".8"/><g id="wha" transform="translate(50 50)"><line x1="0" y1="42" x2="0" y2="-4" style="stroke:var(--acc)" stroke-width="4" stroke-linecap="round"/><polygon points="0,-20 -9,-4 9,-4" style="fill:var(--acc)"/></g></svg><div id="wht"></div></div>
+<div id="pr" class="in-game-hud"></div>
+<div id="gg" class="in-game-hud"><div id="gl"></div><div class="bar"><i id="gf"></i><s></s></div><div id="gv"></div></div>
+<button id="gb" class="in-game-hud">Pegar</button>
+<button id="gq" class="in-game-hud">Olhar</button>
+<button id="gj" class="in-game-hud">Pular</button>
+<button id="gdec" class="in-game-hud">–</button>
+<button id="ginc" class="in-game-hud">+</button>
+<div id="joy-base" class="in-game-hud"><div id="joy-knob"></div></div>
 
 <!-- iOS Install Guide Dialog -->
 <div id="pwa-ios-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center; padding: 16px;">
@@ -96,6 +303,6 @@
   Mar Sem Sinal · Navegando Offline
 </div>
 
-<script type="module" src="/src/main.js"></script>
+<script type="module" src="./src/main.js"></script>
 </body>
 </html>
