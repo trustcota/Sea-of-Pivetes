@@ -29,8 +29,27 @@ const targetWorldQuat = new THREE.Quaternion();
 const dummyHead = new THREE.Object3D();
 dummyHead.rotation.order = 'YXZ';
 
+function requestMobileFullscreenAndLandscape() {
+  const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.matchMedia("(pointer: coarse)").matches;
+  if (!isTouch) return;
+
+  const el = document.documentElement;
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => {});
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen().catch(() => {});
+    }
+  }
+
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(() => {});
+  }
+}
+
 export function startPlayTransition() {
   if (GAME.state !== 'MENU') return;
+  requestMobileFullscreenAndLandscape();
   GAME.state = 'TRANSITION';
   GAME.canControl = false;
 
