@@ -10,6 +10,8 @@ import { updShipPhysics } from './ship/physics.js';
 import { setFpv, resetPlayer, updFPV, updGlow, updGlowHelm, qD } from './ship/player.js';
 import { setupUI, updWindHud, updAnchor } from './ui.js';
 import { isRadialMenuOpen, updateRadialSelectionByDirection, executeSelectedRadialAction } from './radialMenu.js';
+import { fishManager } from './world/fish.js';
+import { fishViewerModal } from './ui/FishViewerModal.js';
 import './pwa.js';
 
 let vy = 0, pt = 0, rl = 0;
@@ -276,7 +278,6 @@ function loop(now) {
   SEAS.chop = .04 + .45 * sw;
   SEAS.wt += dt * (.5 + .6 * sw);
   setWaveDir(wang);
-  updSea(sw);
 
   // Física do navio e dinâmica do casco
   const { hb, hs, hp, ht, hw0, ax, az } = updShipPhysics(dt, sw, gu, wang, vwx, vwz);
@@ -297,7 +298,12 @@ function loop(now) {
   [rl, rlv] = so2(rl, rlv, Math.atan((ht - hp) / 4.4) * .55, 1.26, .4, dt);
   ship.position.y = vy;
   ship.rotation.set(pt, ST.hd, rl + ST.heel);
+  ST.vy = vy;
+  ST.pt = pt;
+  ST.rl = rl;
   fl.rotation.y = FL.a + Math.sin(SEAS.wt * 3) * (.12 + .2 * clamp(WI.wsp / 14, 0, 1));
+
+  updSea(sw);
 
   // Câmera FPV, Orbital ou Transição
   if (GAME.state === 'MENU') {
@@ -373,6 +379,7 @@ function loop(now) {
   }
 
   ILHAS.update(ST.px, ST.pz, dt);
+  fishManager.update(dt, now, ST.px, ST.pz);
   mapTick(dt);
   R.render(sc, cam);
 }
@@ -403,5 +410,9 @@ AN.ax = ST.px;
 AN.az = ST.pz + 5;
 ILHAS.update(ST.px, ST.pz, 0);
 ILHAS.prime();
+
+window.fishViewerModal = fishViewerModal;
+fishViewerModal.init();
+fishManager.spawnEcosystem(s0.x, s0.z);
 
 requestAnimationFrame(loop);

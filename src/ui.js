@@ -53,6 +53,11 @@ export function setupUI(actions = {}) {
     modalSeaBtns.forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.modalSea - S.t) < 0.05));
     const curVd = ILHAS.vd();
     modalVdBtns.forEach(b => b.classList.toggle('on', +b.dataset.modalVd === curVd));
+    const modalRg = $('modal-mapa-rg'), modalRgVal = $('modal-mapa-rg-val');
+    if (modalRg) {
+      modalRg.value = curVd;
+      if (modalRgVal) modalRgVal.textContent = Math.round((curVd - .35) * ILHAS.CS) + ' m';
+    }
 
     // Sincroniza controles do arquipélago
     const modalGh = $('modal-mapa-gh'), modalGhVal = $('modal-mapa-gh-val');
@@ -167,9 +172,15 @@ export function setupUI(actions = {}) {
   });
 
   modalVdBtns.forEach(b => b.onclick = () => {
-    setMapVD(+b.dataset.modalVd);
-    modalVdBtns.forEach(x => x.classList.toggle('on', x === b));
+    setMapVD(+b.dataset.modalVd, true);
   });
+
+  const modalRg = $('modal-mapa-rg');
+  if (modalRg) {
+    modalRg.oninput = () => {
+      setMapVD(+modalRg.value, true);
+    };
+  }
 
   const anb = $('an');
   if (anb) anb.onclick = () => { AN.t = AN.t > .5 ? 0 : 1; };
@@ -435,10 +446,15 @@ export function setupUI(actions = {}) {
   // Ajustes de mapa procedural
   let mapAuto = true, mapVDm = 2, mapFa = 0, mapFn = 0, mapCool = 0;
   const mapVB = [...document.querySelectorAll('[data-vd]')];
-  function setMapVD(v) {
+  function setMapVD(v, isManual = false) {
+    if (isManual) mapVDm = v;
     ILHAS.setVD(v);
     if ($('mapa-rg')) $('mapa-rg').value = v;
     if ($('mapa-rgv')) $('mapa-rgv').textContent = Math.round((v - .35) * ILHAS.CS) + ' m';
+    if ($('modal-mapa-rg')) $('modal-mapa-rg').value = v;
+    if ($('modal-mapa-rg-val')) $('modal-mapa-rg-val').textContent = Math.round((v - .35) * ILHAS.CS) + ' m';
+    mapVB.forEach(x => x.classList.toggle('on', +x.dataset.vd === v));
+    modalVdBtns.forEach(x => x.classList.toggle('on', +x.dataset.modalVd === v));
   }
   function mapTick(dt) {
     mapFa += dt;
@@ -449,10 +465,10 @@ export function setupUI(actions = {}) {
       if (mapCool <= 0 && mapAuto) {
         const v = ILHAS.vd();
         if (f < 30 && v > 2) {
-          setMapVD(Math.max(2, v - (v > 8 ? 2 : 1)));
+          setMapVD(Math.max(2, v - (v > 8 ? 2 : 1)), false);
           mapCool = 5;
         } else if (f > 56 && v < mapVDm) {
-          setMapVD(v + 1);
+          setMapVD(v + 1, false);
           mapCool = 5;
         }
       }
@@ -472,14 +488,10 @@ export function setupUI(actions = {}) {
     ILHAS.update(ST.px, ST.pz, 0);
   }
   mapVB.forEach(b => b.onclick = () => {
-    mapVDm = +b.dataset.vd;
-    setMapVD(mapVDm);
-    mapVB.forEach(x => x.classList.toggle('on', x === b));
+    setMapVD(+b.dataset.vd, true);
   });
   if ($('mapa-rg')) $('mapa-rg').oninput = e => {
-    mapVDm = +e.target.value;
-    setMapVD(mapVDm);
-    mapVB.forEach(x => x.classList.toggle('on', +x.dataset.vd === mapVDm));
+    setMapVD(+e.target.value, true);
   };
   if ($('mapa-au')) $('mapa-au').onclick = e => {
     mapAuto = !mapAuto;

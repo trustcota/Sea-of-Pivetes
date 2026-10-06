@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 export const R = new THREE.WebGLRenderer({ antialias: true });
 export const sc = new THREE.Scene();
-export const cam = new THREE.PerspectiveCamera(60, 1, .5, 800);
+export const cam = new THREE.PerspectiveCamera(60, 1, .5, 2500);
 R.setPixelRatio(Math.min(devicePixelRatio, 2));
 document.body.prepend(R.domElement);
 export const sky = new THREE.Color();

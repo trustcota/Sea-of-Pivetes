@@ -1,6 +1,6 @@
 export const S = { c: .04, t: .04 };
 export const WI = { dir: .45, a: .45, str: .15, s: .15, wsp: 3.75 };
-export const ST = { v: 0, hd: 0, heel: 0, hr: 0, sw: 0, r: 0, fl: 0, px: 0, pz: 0, svx: 0, svz: 0 };
+export const ST = { v: 0, hd: 0, heel: 0, hr: 0, sw: 0, r: 0, fl: 0, px: 0, pz: 0, svx: 0, svz: 0, vy: 0.4, pt: 0, rl: 0 };
 export const SEAS = { amp: .1, st: .2, chop: .04, wt: 0 };
 export const CAM = { yaw: .5, pit: .2, dist: 32, drag: false, auto: true, fpv: false };
 export const GAME = { state: 'MENU', canControl: false };

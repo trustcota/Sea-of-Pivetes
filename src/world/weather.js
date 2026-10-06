@@ -2,9 +2,11 @@ import * as THREE from 'three';
 import { rnd, clamp, c3, m3 } from '../core/math.js';
 import { SKY, CLD, WH } from '../core/palettes.js';
 import { sc, cam, sky, sunL, hemi, fLight } from '../core/renderer.js';
-import { S, WI, ST, LT, FX } from '../core/state.js';
+import { S, WI, ST, LT, FX, AN } from '../core/state.js';
 import { H } from '../world/ocean.js';
-import { clouds, cm } from '../world/clouds.js';
+import { clouds, cm, cloudState, updateCloudsSystem } from '../world/clouds.js';
+import { ILHAS } from '../world/archipelago.js';
+import { SH } from '../ship/ship.js';
 
 const T = THREE;
 const wp = new T.Vector3();
@@ -91,7 +93,206 @@ export function updExtras(dt, ch, sh) {
   }
   wkG.attributes.position.needsUpdate = true;
   wkG.attributes.color.needsUpdate = true;
+
+  updBowSpray(dt, ch, sh);
+  updBirds(dt);
+  updAnchorSplash(dt, ch, sh);
 }
+
+// Bolhas/Espuma da Âncora ao Lançar
+const ANP = 40, anP = new Float32Array(ANP * 3), anV = new Float32Array(ANP * 3), anL = new Float32Array(ANP), anG = new T.BufferGeometry();
+anG.setAttribute('position', new T.BufferAttribute(anP, 3));
+export const anM = new T.Points(anG, new T.PointsMaterial({ color: 0xffffff, size: 1.5, transparent: true, opacity: .8, fog: false }));
+anM.frustumCulled = false;
+sc.add(anM);
+
+let anIdx = 0;
+export function updAnchorSplash(dt, ch, sh) {
+  if (AN.d > .05 && AN.d < .95 && Math.random() < .6) {
+    const i = anIdx++ % ANP;
+    const lx = .88 + rnd(-.3, .3), lz = 3.9 + rnd(-.3, .3);
+    const gx = lx * ch + lz * sh + ST.px;
+    const gz = lz * ch - lx * sh + ST.pz;
+    const gy = H(gx, gz) + rnd(.05, .3);
+
+    anP[i * 3] = gx;
+    anP[i * 3 + 1] = gy;
+    anP[i * 3 + 2] = gz;
+
+    anV[i * 3] = rnd(-.8, .8);
+    anV[i * 3 + 1] = rnd(1, 2.5);
+    anV[i * 3 + 2] = rnd(-.8, .8);
+    anL[i] = rnd(.3, .7);
+  }
+
+  for (let i = 0; i < ANP; i++) {
+    if (anL[i] <= 0) { anP[i * 3 + 1] = -50; continue; }
+    anL[i] -= dt;
+    anV[i * 3 + 1] -= 6 * dt;
+    anP[i * 3] += anV[i * 3] * dt;
+    anP[i * 3 + 1] += anV[i * 3 + 1] * dt;
+    anP[i * 3 + 2] += anV[i * 3 + 2] * dt;
+
+    if (anP[i * 3 + 1] <= H(anP[i * 3], anP[i * 3 + 2])) {
+      anL[i] = 0;
+      anP[i * 3 + 1] = -50;
+    }
+  }
+  anG.attributes.position.needsUpdate = true;
+}
+
+// Aves / Gaivotas 3D Low-Poly com Asas Articuladas sobre o arquipélago
+function createSeagull() {
+  const g = new T.Group();
+  const mBody = new T.MeshStandardMaterial({ color: 0xf5f7fa, flatShading: true, roughness: 0.8 });
+  const mDark = new T.MeshStandardMaterial({ color: 0x3d434a, flatShading: true, roughness: 0.8 });
+  const mBeak = new T.MeshStandardMaterial({ color: 0xf5ab23, flatShading: true, roughness: 0.8 });
+
+  const body = new T.Mesh(new T.IcosahedronGeometry(.26, 1), mBody);
+  body.scale.set(.7, .65, 1.6);
+  g.add(body);
+
+  const head = new T.Mesh(new T.SphereGeometry(.14, 5, 4), mBody);
+  head.position.set(0, .12, .42);
+  g.add(head);
+
+  const beak = new T.Mesh(new T.ConeGeometry(.045, .28, 4), mBeak);
+  beak.rotation.x = Math.PI / 2;
+  beak.position.set(0, .1, .62);
+  g.add(beak);
+
+  const tail = new T.Mesh(new T.ConeGeometry(.12, .45, 3), mDark);
+  tail.rotation.x = -Math.PI / 2;
+  tail.position.set(0, .05, -.52);
+  g.add(tail);
+
+  // Asa Esquerda (Ombro -> Cotovelo)
+  const shoulderL = new T.Group();
+  shoulderL.position.set(-.14, .08, .05);
+  g.add(shoulderL);
+
+  const innerL = new T.Mesh(new T.BoxGeometry(.42, .035, .24), mBody);
+  innerL.position.set(-.21, 0, -.02);
+  shoulderL.add(innerL);
+
+  const elbowL = new T.Group();
+  elbowL.position.set(-.42, 0, -.02);
+  shoulderL.add(elbowL);
+
+  const outerL = new T.Mesh(new T.BoxGeometry(.48, .025, .18), mDark);
+  outerL.position.set(-.24, 0, -.02);
+  elbowL.add(outerL);
+
+  // Asa Direita (Ombro -> Cotovelo)
+  const shoulderR = new T.Group();
+  shoulderR.position.set(.14, .08, .05);
+  g.add(shoulderR);
+
+  const innerR = new T.Mesh(new T.BoxGeometry(.42, .035, .24), mBody);
+  innerR.position.set(.21, 0, -.02);
+  shoulderR.add(innerR);
+
+  const elbowR = new T.Group();
+  elbowR.position.set(.42, 0, -.02);
+  shoulderR.add(elbowR);
+
+  const outerR = new T.Mesh(new T.BoxGeometry(.48, .025, .18), mDark);
+  outerR.position.set(.24, 0, -.02);
+  elbowR.add(outerR);
+
+  g.traverse(o => o.frustumCulled = false);
+  return { g, shoulderL, elbowL, shoulderR, elbowR };
+}
+
+const BCNT = 16;
+const gulls = [];
+export const seagullGroup = new T.Group();
+sc.add(seagullGroup);
+
+for (let i = 0; i < BCNT; i++) {
+  const model = createSeagull();
+  seagullGroup.add(model.g);
+  gulls.push({
+    ...model,
+    ang: i * (Math.PI * 2 / BCNT),
+    r: 26 + (i % 4) * 14,
+    y: 15 + (i % 3) * 5,
+    spd: .12 + (i % 3) * .04,
+    wing: i * .6
+  });
+}
+
+export function updBirds(dt) {
+  const now = performance.now();
+  for (let i = 0; i < BCNT; i++) {
+    const b = gulls[i];
+    b.ang += b.spd * dt;
+    b.wing += dt * (6 + (i % 3));
+
+    const cx = ST.px + Math.cos(b.ang) * b.r;
+    const cz = ST.pz + Math.sin(b.ang) * b.r;
+    const cy = b.y + Math.sin(now * .001 + i) * 2;
+
+    b.g.position.set(cx, cy, cz);
+    b.g.rotation.y = -b.ang + Math.PI / 2;
+    b.g.rotation.z = -.18;
+    b.g.rotation.x = Math.sin(b.wing * .5) * .06;
+
+    const flap = Math.sin(b.wing);
+    b.shoulderL.rotation.z = flap * .42;
+    b.shoulderR.rotation.z = -flap * .42;
+
+    b.elbowL.rotation.z = -Math.abs(flap) * .32;
+    b.elbowR.rotation.z = Math.abs(flap) * .32;
+  }
+}
+
+// Respingos de água na proa (Bow Spray)
+const BSP = 240, bsP = new Float32Array(BSP * 3), bsV = new Float32Array(BSP * 3), bsL = new Float32Array(BSP), bsG = new T.BufferGeometry();
+bsG.setAttribute('position', new T.BufferAttribute(bsP, 3));
+export const bsM = new T.Points(bsG, new T.PointsMaterial({ color: 0xeef8ff, size: 1.2, transparent: true, opacity: .75, fog: false }));
+bsM.frustumCulled = false;
+sc.add(bsM);
+
+let bsIdx = 0;
+export function updBowSpray(dt, ch, sh) {
+  const speed = Math.abs(ST.v);
+  if (speed > .8) {
+    const rate = Math.min(8, Math.floor(speed * 3));
+    for (let k = 0; k < rate; k++) {
+      const i = bsIdx++ % BSP;
+      const side = (k % 2 === 0 ? 1 : -1);
+      const lx = side * rnd(.4, 1.1), ly = rnd(.2, .6), lz = 4.6 + rnd(0, .8);
+      bsP[i * 3] = lx * ch + lz * sh + ST.px;
+      bsP[i * 3 + 1] = H(bsP[i * 3], lz * ch - lx * sh + ST.pz) + ly;
+      bsP[i * 3 + 2] = lz * ch - lx * sh + ST.pz;
+
+      bsV[i * 3] = (side * rnd(.8, 2.2) * ch + rnd(-.4, .4)) * (speed * .25);
+      bsV[i * 3 + 1] = rnd(1.8, 3.8) + speed * .15;
+      bsV[i * 3 + 2] = (-side * rnd(.8, 2.2) * sh + rnd(-.4, .4)) * (speed * .25);
+      bsL[i] = rnd(.4, .85);
+    }
+  }
+
+  for (let i = 0; i < BSP; i++) {
+    if (bsL[i] <= 0) {
+      bsP[i * 3 + 1] = -50;
+      continue;
+    }
+    bsL[i] -= dt;
+    bsV[i * 3 + 1] -= 9.8 * dt;
+    bsP[i * 3] += bsV[i * 3] * dt;
+    bsP[i * 3 + 1] += bsV[i * 3 + 1] * dt;
+    bsP[i * 3 + 2] += bsV[i * 3 + 2] * dt;
+
+    if (bsP[i * 3 + 1] <= H(bsP[i * 3], bsP[i * 3 + 2])) {
+      bsL[i] = 0;
+      bsP[i * 3 + 1] = -50;
+    }
+  }
+  bsG.attributes.position.needsUpdate = true;
+}
+
 
 // Riscos de velocidade na água (fixos no mundo): passam pelo casco e dão noção de deslocamento
 const NSP = 380, spP = new Float32Array(NSP * 6), spA = new Float32Array(NSP * 2), spG = new T.BufferGeometry();
@@ -169,7 +370,9 @@ sc.add(sunG);
 
 export function updSun(dt) {
   const s = S.c, v = clamp(1 - (s - .3) / .35, 0, 1);
-  sunG.visible = v > .01;
+  const occ = cloudState.sunOcclusion;
+  const sunVis = v * (1 - 0.72 * occ);
+  sunG.visible = sunVis > .01;
   if (!sunG.visible) return;
   sunG.position.copy(sunL.position).multiplyScalar(5);
   cam.getWorldPosition(wp);
@@ -177,8 +380,12 @@ export function updSun(dt) {
   const k = performance.now() * .001;
   rays.rotation.z += dt * .06;
   sunMat[0].color.setRGB(1, 1 - .2 * s, 1 - .5 * s);
-  for (let i = 0; i < 4; i++) sunMat[i].opacity = SO[i] * v * (i > 1 ? 1 + .12 * Math.sin(k * 1.7 + i) : 1);
-  sunG.scale.setScalar(1 + .025 * Math.sin(k * 1.3));
+  for (let i = 0; i < 4; i++) {
+    const baseOp = SO[i] * sunVis;
+    sunMat[i].opacity = baseOp * (i > 1 ? 1 + .12 * Math.sin(k * 1.7 + i) : 1);
+  }
+  const occScale = 1 - 0.25 * occ;
+  sunG.scale.setScalar((1 + .025 * Math.sin(k * 1.3)) * occScale);
 }
 
 export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
@@ -198,23 +405,39 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   c3(SKY, s, sky);
   sky.lerp(WH, ff * .5);
   sc.fog.color.copy(sky);
-  sc.fog.density = m3([.013, .017, .027], s);
-  sunL.intensity = m3([.95, .55, .1], s);
+  const vdFactor = Math.max(1, (ILHAS && ILHAS.vd ? ILHAS.vd() : 2) / 2);
+  sc.fog.density = m3([.013, .017, .027], s) / vdFactor;
+
+  // Oclusão solar atenua luz direta do sol e luz secundária
+  const occ = cloudState.sunOcclusion;
+  const baseSunInt = m3([.95, .55, .1], s);
+  sunL.intensity = baseSunInt * (1 - 0.6 * occ);
   key.intensity = sunL.intensity * .4;
-  hemi.intensity = m3([.62, .5, .32], s) + ff * 1.6;
+  hemi.intensity = (m3([.62, .5, .32], s) + ff * 1.6) * (1 - 0.18 * occ);
   fLight.intensity = ff * 2.2;
 
-  // Nuvens
-  c3(CLD, s, cm.color);
-  clouds.scale.setScalar(1 + .6 * s);
-  clouds.position.y = -12 * s;
-  for (const c of clouds.children) {
-    const u = c.userData.v * .35, q = c.position;
-    q.x += (vwx * u - ST.svx) * dt;
-    q.z += (vwz * u - ST.svz) * dt;
-    if (q.x > 240) q.x -= 480; else if (q.x < -240) q.x += 480;
-    if (q.z > 240) q.z -= 480; else if (q.z < -240) q.z += 480;
+  // Lanternas quentes de popa acendem no crepúsculo/tempestade
+  if (SH.lanternLights) {
+    const lInt = Math.max(.2, (s - .2) * 1.8) + ff * 1.2;
+    SH.lanternLights.forEach(l => l.intensity = lInt * (1 + .08 * Math.sin(now * .008)));
   }
+
+  // Vibração suave de câmera durante tempestade ou relâmpagos
+  if (s > .65 || LT.flash > .05) {
+    const shake = (s > .65 ? (s - .65) * .08 : 0) + LT.flash * .12;
+    cam.position.x += (Math.random() - .5) * shake;
+    cam.position.y += (Math.random() - .5) * shake;
+  }
+
+  // Efeito de gotas de chuva na lente da visão/câmera
+  const lensEl = document.getElementById('lens-drops');
+  if (lensEl) {
+    lensEl.style.opacity = Math.max(0, (s - .35) * 1.5).toFixed(2);
+  }
+
+  // Sistema Dinâmico de Nuvens
+  const wang = Math.atan2(vwx, vwz);
+  updateCloudsSystem(dt, now, vwx, vwz, wang, WI.wsp, s);
 
   // Chuva
   const k = clamp((s - .4) / .5, 0, 1), cnt = Math.floor(RN * k);

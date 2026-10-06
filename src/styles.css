@@ -44,6 +44,23 @@ canvas {
   cursor: grab;
 }
 
+/* Efeito de Gotas de Chuva na Visão/Câmera em Tempestade */
+.lens-drops-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1200;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  background-image: radial-gradient(circle at 22% 28%, rgba(255,255,255,0.45) 2px, transparent 3.5px),
+                    radial-gradient(circle at 78% 22%, rgba(255,255,255,0.38) 3px, transparent 4.5px),
+                    radial-gradient(circle at 42% 68%, rgba(255,255,255,0.42) 2.5px, transparent 4px),
+                    radial-gradient(circle at 86% 76%, rgba(255,255,255,0.35) 2px, transparent 3.5px),
+                    radial-gradient(circle at 14% 82%, rgba(255,255,255,0.4) 3px, transparent 4.5px),
+                    radial-gradient(circle at 55% 18%, rgba(255,255,255,0.3) 2.5px, transparent 3.5px);
+  filter: blur(0.4px);
+}
+
 /* Painel de Controle Brutalista/Pirata */
 #ui {
   display: none !important;
@@ -1355,6 +1372,225 @@ body.touch-device #ginc.on {
   .gta-center-hub .hub-label {
     font-size: 9px;
   }
+}
+
+/* ==========================================
+   MODAL DE INSPEÇÃO 3D DE PEIXES ARTICULADOS
+   ========================================== */
+
+/* Botão Flutuante HUD da Fauna Marinha */
+.fish-hud-trigger-btn {
+  position: fixed;
+  left: 14px;
+  top: calc(50% + 52px);
+  transform: translateY(-50%);
+  z-index: 180;
+  background: var(--parchment);
+  color: var(--ink);
+  border: 3px solid var(--line);
+  box-shadow: 4px 4px 0px 0px var(--line), 0 4px 16px rgba(0,0,0,0.4);
+  padding: 8px 12px;
+  border-radius: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Cinzel', serif;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+
+.fish-hud-trigger-btn:hover {
+  background: var(--parchment-light);
+  transform: translateY(-50%) scale(1.05);
+  box-shadow: 6px 6px 0px 0px var(--line), 0 6px 20px rgba(56, 189, 248, 0.4);
+}
+
+.fish-hud-trigger-btn:active {
+  transform: translateY(-50%) scale(0.96);
+  box-shadow: 2px 2px 0px 0px var(--line);
+}
+
+.fish-modal-card {
+  max-width: 860px !important;
+  width: 95% !important;
+}
+
+.fish-modal-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .fish-modal-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fish-species-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.fish-species-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 2px solid var(--line);
+  background: var(--parchment-light);
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow: 2px 2px 0px 0px var(--line);
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.fish-species-btn:hover {
+  background: #ffffff;
+  transform: translateX(2px);
+}
+
+.fish-species-btn.active {
+  background: var(--line) !important;
+  color: #ffffff !important;
+  border-color: var(--acc) !important;
+  box-shadow: 3px 3px 0px 0px var(--acc) !important;
+}
+
+.fish-sp-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.fish-sp-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.fish-sp-title {
+  font-family: 'Cinzel', serif;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.fish-sp-sub {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.fish-preview-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fish-canvas-wrapper {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+  border: 3px solid var(--line);
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.8), 3px 3px 0px 0px var(--line);
+  overflow: hidden;
+}
+
+#fish-preview-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  cursor: grab;
+}
+
+#fish-preview-canvas:active {
+  cursor: grabbing;
+}
+
+.fish-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--parchment-light);
+  padding: 8px 12px;
+  border: 2px solid var(--line);
+  box-shadow: 2px 2px 0px 0px var(--line);
+}
+
+.fish-info-card {
+  background: rgba(28, 18, 12, 0.05);
+  border: 2px solid var(--line);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fish-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 2px dashed var(--line);
+  padding-bottom: 6px;
+}
+
+.fish-card-header h3 {
+  margin: 0;
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--crimson);
+}
+
+.fish-card-sci {
+  font-style: italic;
+  font-size: 11px;
+  color: var(--mut);
+}
+
+.fish-card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.fish-stat-item {
+  background: var(--parchment-light);
+  padding: 6px;
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fish-stat-label {
+  color: var(--mut);
+  text-transform: uppercase;
+  font-size: 9px;
+}
+
+.fish-radar-box {
+  background: #0f172a;
+  color: #38bdf8;
+  border: 2px solid var(--line);
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: bold;
+  box-shadow: 2px 2px 0px 0px var(--line);
 }
 
 

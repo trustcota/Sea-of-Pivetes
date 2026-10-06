@@ -101,7 +101,7 @@ if (iosCloseBtn) {
 
 // Hide install panel on successful installation
 window.addEventListener('appinstalled', () => {
-  console.log('Galeão Pirata was installed successfully!');
+  console.log('Mar de Pivetes was installed successfully!');
   if (installContainer) {
     installContainer.style.display = 'none';
   }

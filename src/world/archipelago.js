@@ -207,6 +207,7 @@ function startPos() { let c = null; for (let k = 0; k < 4 && !c; k++) for (let i
  for (let d = c.r * 1.35 + 50; d < c.r * 1.35 + 300; d += 12) for (let t = 0; t < 16; t++) { const a = -1.5708 + (t % 2 ? 1 : -1) * Math.ceil(t / 2) * .4, x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d; let ok = true; for (let u = 0; u < 8 && ok; u++) ok = deep(x + Math.cos(u * .785) * 14, z + Math.sin(u * .785) * 14, DRAFT * 2.5); if (ok) return { x, z } }
  return { x: c.x + c.r * 3, z: c.z } }
 function update(px, pz, dt) { scene.position.set(-px, -SEA, -pz); ctl.target.set(px, 0, pz); plan(); pump(); const tg = ctl.target;
+ const now = performance.now() * .001; ilhasRoot.rotation.z = Math.sin(now * 1.1) * .003; ilhasRoot.rotation.x = Math.cos(now * .9) * .003;
  chunks.forEach(c => { c.age += dt; if (c.age < 1.2) { const e = Math.max(1 - Math.pow(1 - Math.min(c.age / .9, 1), 3), .001); c.ms.forEach(m => { m.scale.y = e; m.position.y = SEA * (1 - e) }) } if (c.small) c.small.visible = Math.hypot((c.cx + .5) * CS - tg.x, (c.cz + .5) * CS - tg.z) < CS * 1.7 }) }
 function prime() { bud = 40; fcx = 1e9; plan(); for (let i = 0; i < 40 && queue.length; i++) pump() }
 function safeNear(px, pz, hd) { for (let r = 0; r < 260; r += 6) for (let t = 0; t < (r ? 16 : 1); t++) { const a = t * .3927, x = px + Math.cos(a) * r, z = pz + Math.sin(a) * r; if (!hit(x, z, hd) && deep(x, z, DRAFT * 1.6)) return { x, z } } return startPos() }
@@ -214,6 +215,6 @@ function safeNear(px, pz, hd) { for (let r = 0; r < 260; r += 6) for (let t = 0;
 function regen() { cells.clear(); chunks.forEach(drop); chunks.clear(); queue.length = 0; prime() }
 function setCfg(k, v) { GEN[k] = v; calc(); regen() }
 function reseed() { WS = (Math.random() * 1e9 | 0) || 1; regen() }
-function setVD(v) { VD = v; plan.f = 1 }
+function setVD(v) { VD = v; plan.f = 1; bud = 50; }
 return { hit, startPos, safeNear, update, prime, setCfg, reseed, setVD, vd: () => VD, CS, tH, SEA, GEN, chunks, queue, nearestIsland }
 })(ilhasRoot);

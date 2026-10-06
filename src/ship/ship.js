@@ -83,6 +83,12 @@ export const SH = (() => {
   box(2.6, .12, .14, gold, 0, 2.2, -6.04); box(2.2, .12, .14, gold, 0, 1.1, -6.04);
   box(.14, 1.7, .55, dark, 0, -.35, -6.3);
   for (const s of [1, -1]) { cyl(.04, .05, 1.4, 5, dark, s * 1.2, 1.9, -5.7); box(.26, .34, .26, glow, s * 1.2, 2.75, -5.7) }
+  const lanternLights = [1, -1].map(s => {
+    const l = new T.PointLight(0xffaa44, 1.2, 14);
+    l.position.set(s * 1.2, 2.75, -5.7);
+    ship.add(l);
+    return l;
+  });
   const wh = new T.Group(), whm = []; wh.position.set(0, 2.15, -4.6); ship.add(wh);
   box(.36, 1, .36, wood, 0, 1.7, -4.6);
   whm.push(own(add(new T.TorusGeometry(.5, .06, 4, 12), wood, 0, 0, 0, wh)));
@@ -227,7 +233,7 @@ export const SH = (() => {
   const arope = cyl(.04, .04, 1, 5, rp, .88, 1, 3.9); arope.frustumCulled = false;
   inter.push({ t: 'anchor', pos: V(0, .35, 2.2), label: 'Âncora (cabrestante)' });
   inter.push({ t: 'helm', pos: V(0, 2.15, -4.6), label: 'Leme' });
-  return { ship, fl, mats, sails, rigs, walk, inter, wh, helm: HM, anc, arope, cap, lad: LD, whg: whm.map(o => G(o, 'h')) }
+  return { ship, fl, mats, sails, rigs, walk, inter, wh, helm: HM, anc, arope, cap, lad: LD, whg: whm.map(o => G(o, 'h')), lanternLights }
 })();
 
 export const ship = SH.ship;

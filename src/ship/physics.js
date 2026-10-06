@@ -119,30 +119,42 @@ export function updShipPhysics(dt, sw, gu, wang, vwx, vwz) {
   ST.v = clamp(ST.v + (acc + ST.sw * ST.r) * dt, -1.5, 12);
   ST.sw += (kF * Fx * eff / AT - (ST.sw > 0 ? 1 : -1) * Fk * Math.cos(al) - .1 * ST.sw - .25 * ST.sw * Math.abs(ST.sw) - ST.v * ST.r) * dt;
 
-  const rud = -Math.sin(HM.a * .6) * (1 - .2 * Math.max(0, Math.abs(HM.a) - .7) / .3) * .02 * ST.v * Math.abs(ST.v);
-  ST.r += ((3e-4 * Ty / AT + .008 * SEAS.amp * Math.sin(SEAS.wt * .35) + rud - (1.1 + .12 * ar0) * ST.r) / 7) * dt;
-  ST.hd += ST.r * dt;
-
   // Arrasto e retenção da âncora
   if (AN.d > .97) {
-    const k = AN.set ? .8 : .25;
+    const k = AN.set ? 3.0 : 1.0;
     ST.v *= Math.exp(-k * dt);
     ST.sw *= Math.exp(-k * dt);
-    ST.r *= Math.exp(-(AN.set ? 1.5 : .6) * dt);
-    if (!AN.set && Math.abs(ST.v) < .9 && Math.abs(ST.sw) < .9) {
+    if (!AN.set && Math.abs(ST.v) < 1.0 && Math.abs(ST.sw) < 1.0) {
       AN.set = 1;
-      AN.ax = ST.px + sh * 5;
-      AN.az = ST.pz + ch * 5;
+      AN.ax = ST.px + sh * 4.8;
+      AN.az = ST.pz + ch * 4.8;
     }
   } else {
     AN.set = 0;
+  }
+
+  // Dinâmica de rotação do leme e proa (com ancoragem estável)
+  if (AN.set) {
+    // Navio fundeado: alinhamento calmo com o ferro sem oscilação ou giro perpétuo
+    const targetHeading = Math.atan2(AN.ax - ST.px, AN.az - ST.pz);
+    const hDiff = wrapA(targetHeading - ST.hd);
+    if (Math.abs(hDiff) > 0.002) {
+      ST.hd += hDiff * (1 - Math.exp(-dt * 2.5));
+    }
+    ST.r = 0;
+  } else {
+    const rud = -Math.sin(HM.a * .6) * (1 - .2 * Math.max(0, Math.abs(HM.a) - .7) / .3) * .02 * ST.v * Math.abs(ST.v);
+    ST.r += ((3e-4 * Ty / AT + .008 * SEAS.amp * Math.sin(SEAS.wt * .35) + rud - (1.1 + .12 * ar0) * ST.r) / 7) * dt;
+    ST.hd += ST.r * dt;
   }
 
   // Deslocamento no mundo
   const sx = ST.v * sh + ST.sw * ch, sz = ST.v * ch - ST.sw * sh;
   let vx = sx, vz = sz;
   const ox = ST.px, oz = ST.pz;
-  const cvx = .025 * vwx + .06 * SEAS.amp * Math.sin(wang), cvz = .025 * vwz + .06 * SEAS.amp * Math.cos(wang);
+  const driftDamp = AN.set ? 0.05 : (AN.d > 0.9 ? 0.25 : 1.0);
+  const cvx = (.025 * vwx + .06 * SEAS.amp * Math.sin(wang)) * driftDamp;
+  const cvz = (.025 * vwz + .06 * SEAS.amp * Math.cos(wang)) * driftDamp;
   ST.px += (sx + cvx) * dt;
   ST.pz += (sz + cvz) * dt;
   ST.svx = vx + cvx;
@@ -187,7 +199,7 @@ export function updShipPhysics(dt, sw, gu, wang, vwx, vwz) {
 
   // Cabo e raio da âncora fundeada
   if (AN.set) {
-    const tx = ST.px + sh * 5 - AN.ax, tz = ST.pz + ch * 5 - AN.az, tr = Math.hypot(tx, tz), Lc = 9;
+    const tx = ST.px + sh * 4.8 - AN.ax, tz = ST.pz + ch * 4.8 - AN.az, tr = Math.hypot(tx, tz), Lc = 3.5;
     if (tr > Lc) {
       const tnx = tx / tr, tnz = tz / tr;
       ST.px -= tnx * (tr - Lc);
@@ -201,7 +213,6 @@ export function updShipPhysics(dt, sw, gu, wang, vwx, vwz) {
         ST.svx = wx2; ST.svz = wz2;
       }
     }
-    if (tr > Lc * .6) ST.r += wrapA(Math.atan2(AN.ax - ST.px, AN.az - ST.pz) - ST.hd) * .5 * dt;
   }
 
   // Banda e momento restaurador
