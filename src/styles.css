@@ -682,15 +682,19 @@ body.touch-device #ginc.on {
   padding: 0;
 }
 
-.title-subtitle {
+.title-studio-footer {
   font-family: 'JetBrains Mono', monospace;
-  font-size: clamp(11px, 2.4vw, 13px);
+  font-size: clamp(12px, 2.5vw, 14px);
+  font-weight: 700;
   color: var(--parchment);
-  text-shadow: 0 2px 6px rgba(0,0,0,0.9);
-  margin: 0 0 26px 0;
-  opacity: 0.92;
-  max-width: 480px;
-  line-height: 1.5;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95), 0 0 12px rgba(197, 146, 31, 0.3);
+  letter-spacing: 1px;
+  opacity: 0.95;
+  margin-top: 16px;
+  padding: 6px 16px;
+  background: rgba(10, 18, 26, 0.55);
+  border: 1px solid rgba(235, 220, 185, 0.25);
+  backdrop-filter: blur(4px);
 }
 
 .title-actions {

@@ -156,6 +156,10 @@ export function setFpv(on) {
     SH.ship.add(cam);
     cam.rotation.order = 'YXZ';
     cam.near = .08;
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.matchMedia("(pointer: coarse)").matches;
+    if (!isTouch) {
+      try { cv.requestPointerLock(); } catch (_) {}
+    }
   } else {
     INT.grab = null;
     INT.near = null;

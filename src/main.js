@@ -124,6 +124,11 @@ cv.onpointerdown = e => {
     return;
   }
   const isTouch = e.pointerType !== 'mouse' || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  if (CAM.fpv && !isTouch && e.button === 0) {
+    if (document.pointerLockElement !== cv) {
+      try { cv.requestPointerLock(); } catch (_) {}
+    }
+  }
   if (CAM.fpv && isTouch) {
     if (e.clientX < window.innerWidth * 0.5 && joy.id < 0) {
       joy.id = e.pointerId;
