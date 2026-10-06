@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Galeão pirata no oceano</title>
+<meta name="theme-color" content="#111111" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="GaleãoPirata" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<link rel="stylesheet" href="/src/styles.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="ui">
+<h1>Galeão pirata no oceano</h1>
+<button id="mn" title="Minimizar painel">–</button>
+
+<!-- PWA Install Button -->
+<div id="pwa-install-container" style="display: none; margin: 12px 0;">
+  <button id="pwa-install-btn" class="pwa-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--acc); color: white; font-weight: bold; border: 2px solid var(--line); padding: 8px; cursor: pointer; box-shadow: 2px 2px 0px 0px var(--line); font-family: inherit;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Instalar no Dispositivo
+  </button>
+</div>
+
+<p id="st">Mar calmo</p>
+<div class="row"><button data-s="0.04">Calmo</button><button data-s="0.5">Ondas</button><button data-s="1">Tempestade</button></div>
+<label for="sl">Intensidade</label>
+<input id="sl" type="range" min="0" max="100" value="4">
+<label for="wsl">Força do vento</label>
+<input id="wsl" type="range" min="0" max="100" value="15">
+<label for="wdr">Direção do vento (sopra para <span id="wdv">26°</span>)</label>
+<input id="wdr" type="range" min="0" max="359" value="26">
+<div class="row" style="margin-top:6px"><button id="w0">Popa</button><button id="w1">Través</button><button id="w2">Bolina</button></div>
+<label for="hlm">Leme (← bombordo · estibordo →)</label>
+<input id="hlm" type="range" min="-100" max="100" value="0">
+<div class="row" style="grid-template-columns:1fr;margin-top:12px"><button id="fv">Entrar no navio (FPV)</button></div>
+<div class="row" style="grid-template-columns:1fr;margin-top:8px"><button id="tm">Modo teste (liberar painel)</button></div>
+<div class="row" style="grid-template-columns:1fr;margin-top:8px"><button id="an">Âncora: içada (lançar)</button></div>
+<div class="row two"><button id="ar" class="on">Girar sozinho</button><button id="wf">Malha do navio</button></div>
+<label>Velas</label>
+<div class="row"><button id="up">Içar tudo</button><button id="md">Meia vela</button><button id="dn">Arriar</button></div>
+<label>Içar (cordas douradas)</label>
+<div id="sls"></div>
+<label>Rotacionar (cordas vermelhas)</label>
+<div id="rts"></div>
+<div class="row" style="grid-template-columns:1fr;margin-top:8px"><button id="ct">Centralizar velas</button></div>
+<label>Mapa · distância de renderização <b id="mapa-rgv">0 m</b></label>
+<input id="mapa-rg" type="range" min="2" max="20" step="1" value="2">
+<div class="row"><button data-vd="2" class="on">Curta</button><button data-vd="3">Média</button><button data-vd="4">Longa</button></div>
+<div class="row two" style="margin-top:6px"><button id="mapa-au" class="on">Auto</button><button id="mapa-ns">Nova semente</button></div>
+<label for="mapa-gh">Altura das ilhas <b id="mapa-ghv"></b></label>
+<input id="mapa-gh" type="range" min="2" max="12" step=".2" value="4.6">
+<label for="mapa-gd">Profundidade do oceano <b id="mapa-gdv"></b></label>
+<input id="mapa-gd" type="range" min="3" max="20" step="1" value="9">
+<label for="mapa-gs">Distância entre ilhas <b id="mapa-gsv"></b></label>
+<input id="mapa-gs" type="range" min="120" max="300" step="5" value="140">
+<label for="mapa-gn">Densidade de ilhas <b id="mapa-gnv"></b></label>
+<input id="mapa-gn" type="range" min="40" max="100" step="5" value="85">
+</div>
+<div id="wh"><svg viewBox="0 0 100 100" width="88" height="88"><g id="whc" transform="translate(50 50)"><circle cx="0" cy="0" r="46" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="2"/><line x1="0" y1="-46" x2="0" y2="-40" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="0" y1="40" x2="0" y2="46" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="40" y1="0" x2="46" y2="0" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="-46" y1="0" x2="-40" y2="0" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><text x="0" y="-29" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#e5534b" style="user-select:none">N</text><text x="0" y="31" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">S</text><text x="31" y="1" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">L</text><text x="-31" y="1" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">O</text></g><path d="M50 26 L62 68 L50 61 L38 68 Z" fill="currentColor" fill-opacity=".8"/><g id="wha" transform="translate(50 50)"><line x1="0" y1="42" x2="0" y2="-4" style="stroke:var(--acc)" stroke-width="4" stroke-linecap="round"/><polygon points="0,-20 -9,-4 9,-4" style="fill:var(--acc)"/></g></svg><div id="wht"></div></div>
+<div id="pr"></div>
+<div id="gg"><div id="gl"></div><div class="bar"><i id="gf"></i><s></s></div><div id="gv"></div></div>
+<button id="gb">Pegar</button>
+<button id="gq">Olhar</button>
+<button id="gj">Pular</button>
+<button id="gdec">–</button>
+<button id="ginc">+</button>
+<div id="joy-base"><div id="joy-knob"></div></div>
+<div id="hint">Arraste para girar · role para aproximar</div>
+
+<!-- iOS Install Guide Dialog -->
+<div id="pwa-ios-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center; padding: 16px;">
+  <div style="background: var(--parchment); border: 3px solid var(--line); box-shadow: 6px 6px 0px 0px var(--line); padding: 20px; max-width: 300px; font-family: inherit; color: var(--ink); position: relative;">
+    <h3 style="margin-top: 0; font-family: 'Cinzel', serif; font-size: 18px; border-bottom: 2px solid var(--line); padding-bottom: 8px; color: var(--crimson);">Instalar no iPhone / iPad</h3>
+    <p style="margin: 16px 0 12px 0; font-size: 13px; line-height: 1.5;">
+      1. Toque no botão de <strong>Compartilhar</strong> <span style="font-size: 16px; font-weight: bold; color: var(--acc);">⎋</span> na barra inferior do Safari.<br/><br/>
+      2. Role a lista e toque em <strong>Adicionar à Tela de Início</strong> <span style="font-size: 16px; font-weight: bold; color: var(--acc);">⊞</span>.
+    </p>
+    <button id="pwa-ios-close" class="pwa-btn" style="width: 100%; background: var(--crimson); color: white; border: 2px solid var(--line); padding: 8px; font-weight: bold; cursor: pointer; box-shadow: 2px 2px 0px 0px var(--line); font-family: inherit; margin-top: 8px;">
+      Entendido, Capitão!
+    </button>
+  </div>
+</div>
+
+<!-- Offline Indicator -->
+<div id="pwa-offline-indicator" style="display: none; position: fixed; bottom: 12px; left: 12px; z-index: 999; background: var(--crimson); color: white; padding: 8px 12px; border: 2px solid var(--line); box-shadow: 3px 3px 0px 0px var(--line); font-weight: bold; align-items: center; gap: 8px; font-family: inherit;">
+  <span class="pwa-pulse-dot" style="display: inline-block; width: 8px; height: 8px; background: white; border-radius: 50%;"></span>
+  Mar Sem Sinal · Navegando Offline
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
