@@ -575,6 +575,17 @@ export function setupRadialMenu(helpers) {
 
   // Suporte a Teclado no Menu Radial
   window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyQ' && !e.repeat && GAME.state === 'PLAY' && CAM.fpv && GAME.canControl && e.target.tagName !== 'INPUT') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isOpen) {
+        closeRadialMenu();
+      } else {
+        openRadialMenu('main');
+      }
+      return;
+    }
+
     if (!isOpen) return;
 
     if (e.code === 'Escape') {

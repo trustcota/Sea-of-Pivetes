@@ -93,7 +93,7 @@ export function hud() {
 
   if (on && INT.grab) {
     const it = INT.grab;
-    gl.textContent = it.label + ' · [E] soltar' + ((it.t === 'helm' || it.t === 'anchor') ? ' · olhe à vontade' : qD() ? ' · olhar livre' : ' · segure [Q] p/ olhar livre');
+    gl.textContent = it.label + ' · [E] soltar · [Q] Ordens do Capitão';
     gg.classList.toggle('r', it.t !== 'hoist' && it.t !== 'anchor');
     gg.classList.toggle('lim', INT.limHit);
 
@@ -177,7 +177,7 @@ export function setFpv(on) {
   cam.updateProjectionMatrix();
   if (hint) {
     hint.textContent = on
-      ? 'Mouse olha ao redor (clique na tela se o cursor estiver solto) · WASD mover · Shift correr · E pegar/soltar corda e usar escada · Espaço pular · Q (com corda) olhar livre · V alterna · Esc libera o cursor'
+      ? 'Mouse olha ao redor (clique na tela se o cursor estiver solto) · WASD mover · Shift correr · E interagir · Espaço pular · Q Ordens do Capitão · V alterna · Esc libera o cursor'
       : 'Arraste para girar · role para aproximar';
   }
   updateRadialOrdersVisibility();
