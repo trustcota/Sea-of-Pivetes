@@ -406,24 +406,44 @@ export function updSwim(dt) {
     r = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + joy.dx;
   const l = Math.hypot(f, r);
   if (l > 1) { f /= l; r /= l; }
-  const sp = (keys.ShiftLeft || keys.ShiftRight) ? 3 : 1.7, sn = Math.sin(fp.yaw), cs = Math.cos(fp.yaw),
+
+  const terH = ILHAS.tH(PL.wx, PL.wz);
+  const onLand = terH >= ILHAS.SEA - .4;
+
+  const sp = (keys.ShiftLeft || keys.ShiftRight) ? (onLand ? 3.8 : 3.0) : (onLand ? 2.2 : 1.7),
+    sn = Math.sin(fp.yaw), cs = Math.cos(fp.yaw),
     k = PL.wet ? 1 : .25, mvx = (-sn * f + cs * r) * sp * k, mvz = (-cs * f - sn * r) * sp * k;
+
   if (PL.wet) {
     const d = Math.exp(-1.3 * dt);
     PL.vx *= d; PL.vz *= d;
   }
-  const nx = PL.wx + (PL.vx + mvx) * dt, nz = PL.wz + (PL.vz + mvz) * dt, shl = (x, z) => ILHAS.tH(x, z) > ILHAS.SEA - .9;
-  if (!shl(nx, PL.wz)) PL.wx = nx; else PL.vx = 0;
-  if (!shl(PL.wx, nz)) PL.wz = nz; else PL.vz = 0;
+
+  PL.wx += (PL.vx + mvx) * dt;
+  PL.wz += (PL.vz + mvz) * dt;
+
   const hw = H(PL.wx, PL.wz);
+  const curTerH = ILHAS.tH(PL.wx, PL.wz);
+  const targetY = Math.max(curTerH, hw - 1.3);
+
   if (PL.wet) {
-    PL.y += (hw - 1.3 - PL.y) * Math.min(1, dt * 6);
+    PL.y += (targetY - PL.y) * Math.min(1, dt * 8);
   } else {
     PL.vy -= 11 * dt;
     PL.y += PL.vy * dt;
-    if (PL.y + .9 < hw) {
-      PL.wet = true; PL.vy = 0; PL.vx *= .5; PL.vz *= .5;
+    if (PL.y <= targetY) {
+      PL.y = targetY;
+      PL.wet = true;
+      PL.vy = 0;
+      PL.vx *= .5;
+      PL.vz *= .5;
     }
+  }
+
+  // Pulo na praia ou ilha
+  if (curTerH >= ILHAS.SEA - .4 && PL.wet && (keys.Space || INT.tJump)) {
+    PL.vy = 4.2;
+    PL.wet = false;
   }
 
   // Casco sólido: o nadador não entra no navio
@@ -452,9 +472,17 @@ export function updSwim(dt) {
     startClimb(lad, true);
     return updClimb(dt);
   }
-  cam.position.set(PL.wx - ST.px, ey, PL.wz - ST.pz);
+
+  cam.position.set(PL.wx - ST.px, PL.y + 1.65, PL.wz - ST.pz);
   cam.rotation.set(fp.pit, fp.yaw, 0);
-  hudMode(lad ? 'Subir pela escada [E]' : 'Na água · nade até a escada de cordas · V volta ao convés', lad ? 'Escada' : null);
+
+  const msg = lad
+    ? 'Subir pela escada [E]'
+    : curTerH >= ILHAS.SEA
+      ? 'Na ilha · explore a terra firme · V volta ao convés'
+      : 'Na água · nade até a ilha ou escada · V volta ao convés';
+
+  hudMode(msg, lad ? 'Escada' : null);
 }
 
 export function updFPV(dt, rows, SL, rrows, hlm) {

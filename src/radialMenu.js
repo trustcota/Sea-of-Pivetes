@@ -1,6 +1,7 @@
 import { AN, HM, CAM, GAME, INT } from './core/state.js';
 import { setFpv } from './ship/player.js';
 import { SH } from './ship/ship.js';
+import { cv } from './core/renderer.js';
 
 let setAllFn = null;
 let activeMenu = 'main';
@@ -303,6 +304,9 @@ export function openRadialMenu(menuKey = 'main') {
   selectedIndex = -1;
   rjoy.id = -1;
   hideRightJoycon();
+  if (document.pointerLockElement) {
+    try { document.exitPointerLock(); } catch (_) {}
+  }
   const overlay = document.getElementById('radial-orders-overlay');
   if (overlay) {
     overlay.style.display = 'flex';
@@ -318,6 +322,12 @@ export function closeRadialMenu() {
   const overlay = document.getElementById('radial-orders-overlay');
   if (overlay) {
     overlay.style.display = 'none';
+  }
+  if (CAM.fpv && GAME.state === 'PLAY') {
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.matchMedia("(pointer: coarse)").matches;
+    if (!isTouch && cv) {
+      try { cv.requestPointerLock(); } catch (_) {}
+    }
   }
 }
 
@@ -573,15 +583,28 @@ export function setupRadialMenu(helpers) {
     };
   }
 
-  // Suporte a Teclado no Menu Radial
+  window.addEventListener('pointermove', (e) => {
+    if (!isOpen) return;
+    if (e.pointerType === 'mouse' && rjoy.id < 0) {
+      const wheel = document.getElementById('radial-wheel');
+      if (wheel) {
+        const rect = wheel.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        updateRadialSelectionByDirection(e.clientX - centerX, e.clientY - centerY);
+      }
+    }
+  });
+
+  // Suporte a Teclado no Menu Radial (Hold Q para abrir, release Q para executar)
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyQ' && !e.repeat && GAME.state === 'PLAY' && CAM.fpv && GAME.canControl && e.target.tagName !== 'INPUT') {
+    if (e.code === 'KeyQ' && e.target.tagName !== 'INPUT') {
       e.preventDefault();
       e.stopPropagation();
-      if (isOpen) {
-        closeRadialMenu();
-      } else {
-        openRadialMenu('main');
+      if (!e.repeat && GAME.state === 'PLAY' && CAM.fpv && GAME.canControl) {
+        if (!isOpen) {
+          openRadialMenu('main');
+        }
       }
       return;
     }
@@ -613,6 +636,18 @@ export function setupRadialMenu(helpers) {
     if (e.code === 'Enter' || e.code === 'Space') {
       e.stopPropagation();
       executeSelectedRadialAction();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'KeyQ' && e.target.tagName !== 'INPUT') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isOpen) {
+        if (!executeSelectedRadialAction()) {
+          closeRadialMenu();
+        }
+      }
     }
   });
 }

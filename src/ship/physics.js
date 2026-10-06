@@ -148,19 +148,39 @@ export function updShipPhysics(dt, sw, gu, wang, vwx, vwz) {
   ST.svx = vx + cvx;
   ST.svz = vz + cvz;
 
-  // Colisão com as ilhas
+  // Colisão com as ilhas e mecânica de raspagem de fundo para desencalhar
   if (ILHAS.hit(ST.px, ST.pz, ST.hd)) {
-    const nx = ST.px, nz = ST.pz;
-    ST.px = ox; ST.pz = nz;
-    if (ILHAS.hit(ST.px, ST.pz, ST.hd)) {
-      ST.px = nx; ST.pz = oz;
-      if (ILHAS.hit(ST.px, ST.pz, ST.hd)) {
-        ST.px = ox; ST.pz = oz;
+    const helmHard = Math.abs(HM.a);
+    if (helmHard > 0.3) {
+      // Raspagem do fundo: gira o casco lentamente e aplica recuo para desencalhar
+      const scrapeRate = -Math.sign(HM.a) * 0.22 * helmHard;
+      ST.r += (scrapeRate - ST.r) * Math.min(1, dt * 3);
+      const pushSpeed = -0.35 * helmHard;
+      const pushSx = pushSpeed * sh, pushSz = pushSpeed * ch;
+      const tryPx = ox + pushSx * dt, tryPz = oz + pushSz * dt;
+      if (!ILHAS.hit(tryPx, tryPz, ST.hd)) {
+        ST.px = tryPx;
+        ST.pz = tryPz;
+      } else {
+        ST.px = ox;
+        ST.pz = oz;
       }
+      ST.v = pushSpeed * 0.4;
+      // Vibração tátil do casco raspando no banco de areia
+      ST.hr += Math.sin(performance.now() * 0.02) * 0.08 * helmHard;
+    } else {
+      const nx = ST.px, nz = ST.pz;
+      ST.px = ox; ST.pz = nz;
+      if (ILHAS.hit(ST.px, ST.pz, ST.hd)) {
+        ST.px = nx; ST.pz = oz;
+        if (ILHAS.hit(ST.px, ST.pz, ST.hd)) {
+          ST.px = ox; ST.pz = oz;
+        }
+      }
+      const kk = Math.exp(-2.5 * dt);
+      ST.v *= kk;
+      ST.sw *= kk;
     }
-    const kk = Math.exp(-2.5 * dt);
-    ST.v *= kk;
-    ST.sw *= kk;
     ST.svx = (ST.px - ox) / dt;
     ST.svz = (ST.pz - oz) / dt;
   }
