@@ -187,17 +187,21 @@ export const aimPt = it => it.t === 'anchor' ? it.pos : it.t === 'hoist' ? it.sa
 
 export function updInter(dt, rows, SL, rrows, hlm) {
   if (!INT.grab) {
-    let b = null, bd = 1.7;
+    let b = null, bd = 1.0;
     for (const it of SH.inter) {
-      const d = Math.hypot(it.pos.x - fp.x, it.pos.z - fp.z);
-      if (d < bd && Math.abs(it.pos.y - fp.y) < 2) {
+      const dx = it.pos.x - fp.x, dz = it.pos.z - fp.z;
+      const d = Math.hypot(dx, dz);
+      // Verifica distância e se o jogador está olhando na direção do objeto (cone de visão de ~130°)
+      const dot = -Math.sin(fp.yaw) * (dx / (d || 1)) - Math.cos(fp.yaw) * (dz / (d || 1));
+      if (d < bd && Math.abs(it.pos.y - fp.y) < 2 && dot > 0.4) {
         bd = d; b = it;
       }
     }
     let ld = null;
-    if (Math.abs(fp.z - 2.1) < .8 && Math.abs(fp.x) > 1.1 && fp.y < .6) {
-      const s = fp.x < 0 ? -1 : 1;
-      ld = { t: 'ladder', s, pos: new T.Vector3(s * 2, 1, 2.1), label: 'Escada de cordas' };
+    const s = fp.x < 0 ? -1 : 1;
+    const dotL = -Math.sin(fp.yaw) * s;
+    if (Math.abs(fp.z - 2.1) < .9 && Math.abs(fp.x) > 0.7 && fp.y < .6 && dotL > 0.4) {
+      ld = { t: 'ladder', s, pos: new T.Vector3(s * 1.5, 1, 2.1), label: 'Escada de cordas' };
     }
     INT.near = ld || b;
   }
