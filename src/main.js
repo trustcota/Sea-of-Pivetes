@@ -47,6 +47,10 @@ function requestMobileFullscreenAndLandscape() {
   }
 }
 
+// Força tela cheia e orientação paisagem ao clicar/tocar em qualquer parte da tela
+window.addEventListener('pointerdown', requestMobileFullscreenAndLandscape, { passive: true });
+window.addEventListener('touchstart', requestMobileFullscreenAndLandscape, { passive: true });
+
 export function startPlayTransition() {
   if (GAME.state !== 'MENU') return;
   requestMobileFullscreenAndLandscape();
