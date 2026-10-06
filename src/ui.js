@@ -3,6 +3,7 @@ import { S, WI, ST, CAM, UIS, HM, AN, INT, keys, GAME } from './core/state.js';
 import { setFpv, resetPlayer } from './ship/player.js';
 import { SH } from './ship/ship.js';
 import { ILHAS } from './world/archipelago.js';
+import { setupRadialMenu, updateRadialOrdersVisibility } from './radialMenu.js';
 
 export const degN = r => ((Math.round(r / D2) % 360) + 360) % 360;
 export const potName = g => g < 30 ? 'de popa' : g < 80 ? 'alheta' : g < 110 ? 'través' : g < 155 ? 'bolina' : 'de proa';
@@ -406,12 +407,15 @@ export function setupUI(actions = {}) {
       if (settingsModal && settingsModal.style.display !== 'none') { closeSettings(); return; }
       if (controlsModal && controlsModal.style.display !== 'none') { closeControls(); return; }
     }
+    
+    // Registra as teclas globalmente para evitar travamento ao liberar controles
+    keys[e.code] = 1;
+
     if (GAME.state !== 'PLAY' || !GAME.canControl) {
       if (e.code === 'KeyV' || e.code === 'Space' || e.code.indexOf('Arrow') === 0) e.preventDefault();
       return;
     }
     if (e.code === 'KeyV' && !e.repeat && e.target.tagName !== 'INPUT') setFpv(!CAM.fpv);
-    keys[e.code] = 1;
     if (CAM.fpv && e.code.indexOf('Arrow') === 0) e.preventDefault();
     if (CAM.fpv && e.code === 'Space' && e.target.tagName !== 'INPUT') {
       e.preventDefault();
@@ -419,12 +423,10 @@ export function setupUI(actions = {}) {
     }
   });
   addEventListener('keyup', e => {
-    if (GAME.state !== 'PLAY' || !GAME.canControl) {
-      keys[e.code] = 0;
-      return;
-    }
     keys[e.code] = 0;
-    if (CAM.fpv && e.code === 'Space' && e.target.tagName !== 'INPUT') e.preventDefault();
+    if (GAME.state === 'PLAY' && GAME.canControl && CAM.fpv && e.code === 'Space' && e.target.tagName !== 'INPUT') {
+      e.preventDefault();
+    }
   });
   addEventListener('blur', () => {
     for (const k in keys) keys[k] = 0;
@@ -500,6 +502,8 @@ export function setupUI(actions = {}) {
     };
   });
   setMapVD(2);
+
+  setupRadialMenu({ setAll });
 
   return {
     rows,

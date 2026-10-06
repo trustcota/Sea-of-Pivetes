@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { clamp, wrapA } from './core/math.js';
 import { R, sc, cam, cv } from './core/renderer.js';
-import { S, WI, ST, SEAS, CAM, UIS, FX, FL, AN, INT, fp, keys, joy, lk, GAME } from './core/state.js';
+import { S, WI, ST, SEAS, CAM, UIS, FX, FL, AN, INT, fp, keys, joy, lk, GAME, PL } from './core/state.js';
 import { setWaveDir, H, updSea } from './world/ocean.js';
 import { ILHAS } from './world/archipelago.js';
 import { updExtras, updSpeedFx, vn, updSun, updAtmosphere } from './world/weather.js';
@@ -9,6 +9,7 @@ import { ship, fl } from './ship/ship.js';
 import { updShipPhysics } from './ship/physics.js';
 import { setFpv, resetPlayer, updFPV, updGlow, updGlowHelm, qD } from './ship/player.js';
 import { setupUI, updWindHud, updAnchor } from './ui.js';
+import { isRadialMenuOpen, updateRadialSelectionByDirection, executeSelectedRadialAction } from './radialMenu.js';
 import './pwa.js';
 
 let vy = 0, pt = 0, rl = 0;
@@ -32,6 +33,17 @@ export function startPlayTransition() {
   if (GAME.state !== 'MENU') return;
   GAME.state = 'TRANSITION';
   GAME.canControl = false;
+
+  // Garante que a posição/estado do player está limpa antes da interpolação
+  fp.x = 0;
+  fp.y = .35;
+  fp.z = .9;
+  fp.yaw = Math.PI;
+  fp.pit = 0;
+  PL.m = 'ship';
+  PL.air = false;
+  PL.vy = 0;
+  PL.wet = false;
 
   // Fade out na tela inicial
   const titleScreen = document.getElementById('title-screen');
@@ -126,13 +138,15 @@ cv.onpointerdown = e => {
     }
   } else {
     CAM.drag = true;
-    if (CAM.fpv && !document.pointerLockElement && cv.requestPointerLock) cv.requestPointerLock();
   }
   try { cv.setPointerCapture(e.pointerId); } catch (_) {}
 };
 
 window.addEventListener('pointerup', e => {
   CAM.drag = false;
+  if (isRadialMenuOpen()) {
+    executeSelectedRadialAction();
+  }
   if (e.pointerId === joy.id) {
     joy.id = -1;
     joy.dx = joy.dy = 0;
@@ -145,6 +159,9 @@ window.addEventListener('pointerup', e => {
 
 window.addEventListener('pointercancel', e => {
   CAM.drag = false;
+  if (isRadialMenuOpen()) {
+    executeSelectedRadialAction();
+  }
   if (e.pointerId === joy.id) {
     joy.id = -1;
     joy.dx = joy.dy = 0;
@@ -156,6 +173,20 @@ window.addEventListener('pointercancel', e => {
 });
 
 window.addEventListener('pointermove', e => {
+  if (isRadialMenuOpen()) {
+    if (e.pointerId === joy.id) {
+      joy.dx = clamp((e.clientX - joy.x0) / 50, -1, 1);
+      joy.dy = clamp((e.clientY - joy.y0) / 50, -1, 1);
+      updateJoystickKnob(joy.dx, joy.dy);
+      updateRadialSelectionByDirection(joy.dx, joy.dy);
+    } else {
+      const dx = e.clientX - window.innerWidth / 2;
+      const dy = e.clientY - window.innerHeight / 2;
+      updateRadialSelectionByDirection(dx, dy);
+    }
+    return;
+  }
+
   if (GAME.state === 'MENU') {
     if (CAM.drag) {
       CAM.yaw -= e.movementX * .006;
@@ -270,6 +301,9 @@ function loop(now) {
     const t = Math.min(elapsed / TRANS_DURATION, 1);
     // Curva cúbica suave (ease-in-out)
     const ease = t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+    // Garante que a matriz global de transformação do navio está 100% atualizada
+    ship.updateMatrixWorld(true);
 
     // Converte posição dos olhos do jogador para o espaço global
     targetWorldPos.set(fp.x, fp.y + 1.65, fp.z);

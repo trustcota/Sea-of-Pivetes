@@ -6,6 +6,7 @@ import { ST, INT, PL, CAM, AN, HM, fp, keys, joy, lk, GAME } from '../core/state
 import { H } from '../world/ocean.js';
 import { ILHAS } from '../world/archipelago.js';
 import { SH } from './ship.js';
+import { updateRadialOrdersVisibility } from '../radialMenu.js';
 
 const T = THREE;
 const _v = new T.Vector3();
@@ -155,10 +156,6 @@ export function setFpv(on) {
     SH.ship.add(cam);
     cam.rotation.order = 'YXZ';
     cam.near = .08;
-    try {
-      const r = cv.requestPointerLock && cv.requestPointerLock();
-      if (r && r.catch) r.catch(() => {});
-    } catch (_) {}
   } else {
     INT.grab = null;
     INT.near = null;
@@ -179,6 +176,7 @@ export function setFpv(on) {
       ? 'Mouse olha ao redor (clique na tela se o cursor estiver solto) · WASD mover · Shift correr · E pegar/soltar corda e usar escada · Espaço pular · Q (com corda) olhar livre · V alterna · Esc libera o cursor'
       : 'Arraste para girar · role para aproximar';
   }
+  updateRadialOrdersVisibility();
 }
 
 export const aimPt = it => it.t === 'anchor' ? it.pos : it.t === 'hoist' ? it.sail.hr.position : it.t === 'helm' ? it.pos : SH.sails.find(x => x.rg === it.rg).rop[it.k > 0 ? 0 : 1].position;
