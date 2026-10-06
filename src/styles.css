@@ -1192,112 +1192,90 @@ body.touch-device #ginc.on {
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
 
-.radial-wheel {
+/* Estilo GTA V Weapon Wheel SVG */
+.gta-radial-wrapper {
   position: relative;
-  width: 290px;
-  height: 290px;
-  border-radius: 50%;
-  border: 4px dashed rgba(197, 146, 31, 0.45);
-  background: radial-gradient(circle, rgba(38, 26, 17, 0.85) 0%, rgba(18, 12, 8, 0.92) 75%);
-  box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 12px 36px rgba(0,0,0,0.7), 0 0 0 6px var(--line);
+  width: 320px;
+  height: 320px;
   display: flex;
   align-items: center;
   justify-content: center;
+  user-select: none;
 }
 
-.radial-center-hub {
+.gta-radial-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 10px 24px rgba(0,0,0,0.85));
+}
+
+.gta-slice-path {
+  fill: rgba(28, 18, 12, 0.88);
+  stroke: rgba(197, 146, 31, 0.45);
+  stroke-width: 2px;
+  cursor: pointer;
+  transition: fill 0.12s ease, transform 0.12s ease, filter 0.12s ease, stroke 0.12s ease;
+}
+
+.gta-slice-path:hover, .gta-slice-path.active {
+  fill: rgba(197, 146, 31, 0.95);
+  stroke: var(--crimson);
+  stroke-width: 3.5px;
+  filter: drop-shadow(0 0 16px rgba(197, 146, 31, 0.95));
+}
+
+.gta-slice-text-label {
+  font-family: 'Cinzel', serif;
+  font-weight: 800;
+  pointer-events: none;
+  user-select: none;
+}
+
+.gta-center-hub {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 82px;
-  height: 82px;
+  width: 112px;
+  height: 112px;
   border-radius: 50%;
-  background: var(--parchment);
-  color: var(--ink);
+  background: radial-gradient(circle, var(--parchment-light) 0%, var(--parchment) 100%);
   border: 3px solid var(--line);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.6), 2px 2px 0px 0px var(--line);
-  cursor: pointer;
+  box-shadow: inset 0 0 12px rgba(0,0,0,0.3), 0 4px 18px rgba(0,0,0,0.7);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  z-index: 10;
-  transition: transform 0.15s ease, background 0.15s ease;
+  text-align: center;
+  padding: 6px;
+  box-sizing: border-box;
+  pointer-events: none;
 }
 
-.radial-center-hub:hover {
-  background: var(--parchment-light);
-  transform: translate(-50%, -50%) scale(1.08);
-}
-
-.radial-center-hub:active {
-  transform: translate(-50%, -50%) scale(0.95);
-}
-
-.radial-center-hub .hub-icon {
-  font-size: 22px;
+.gta-center-hub .hub-emblem {
+  font-size: 24px;
   line-height: 1;
 }
 
-.radial-center-hub .hub-text {
+.gta-center-hub .hub-label {
   font-family: 'Cinzel', serif;
   font-weight: 800;
-  font-size: 9px;
-  margin-top: 2px;
-  letter-spacing: 0.5px;
+  font-size: 10px;
   color: var(--crimson);
+  margin-top: 3px;
+  text-transform: uppercase;
+  line-height: 1.15;
+  letter-spacing: 0.5px;
 }
 
-/* Slices / Botões Radiais */
-.radial-slice {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 88px;
-  height: 74px;
-  background: var(--parchment);
+.gta-center-hub .hub-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
   color: var(--ink);
-  border: 2px solid var(--line);
-  box-shadow: 3px 3px 0px 0px var(--line), 0 4px 12px rgba(0,0,0,0.4);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  cursor: pointer;
-  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-  user-select: none;
-  font-family: 'Cinzel', serif;
-  box-sizing: border-box;
-}
-
-.radial-slice .slice-icon {
-  font-size: 20px;
-  line-height: 1.1;
-  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
-}
-
-.radial-slice .slice-label {
-  font-weight: 800;
-  font-size: 11px;
-  text-align: center;
-  line-height: 1.2;
+  opacity: 0.85;
   margin-top: 2px;
-  color: var(--ink);
-}
-
-.radial-slice:hover, .radial-slice.active {
-  background: var(--acc-light) !important;
-  color: var(--ink) !important;
-  border-color: var(--crimson) !important;
-  box-shadow: 0 0 16px rgba(197, 146, 31, 0.8), 5px 5px 0px 0px var(--line) !important;
-  z-index: 5;
-}
-
-.radial-slice.active {
-  transform: scale(1.15) !important;
+  line-height: 1.1;
 }
 
 .radial-menu-hint {
@@ -1308,7 +1286,7 @@ body.touch-device #ginc.on {
   opacity: 0.85;
   text-align: center;
   text-shadow: 0 1px 4px rgba(0,0,0,0.9);
-  max-width: 300px;
+  max-width: 320px;
 }
 
 @media (max-width: 480px) {
@@ -1317,18 +1295,18 @@ body.touch-device #ginc.on {
     padding: 8px 10px;
     font-size: 11px;
   }
-  .radial-wheel {
-    width: 250px;
-    height: 250px;
+  .gta-radial-wrapper {
+    width: 270px;
+    height: 270px;
   }
-  .radial-slice {
-    width: 76px;
-    height: 64px;
+  .gta-center-hub {
+    width: 96px;
+    height: 96px;
   }
-  .radial-slice .slice-icon {
-    font-size: 17px;
+  .gta-center-hub .hub-emblem {
+    font-size: 20px;
   }
-  .radial-slice .slice-label {
+  .gta-center-hub .hub-label {
     font-size: 9px;
   }
 }

@@ -1,13 +1,39 @@
 import { AN, HM, CAM, GAME, INT } from './core/state.js';
 import { setFpv } from './ship/player.js';
+import { SH } from './ship/ship.js';
 
 let setAllFn = null;
 let activeMenu = 'main';
 let isOpen = false;
 let selectedIndex = -1;
-let lastTouchX = 0;
-let lastTouchY = 0;
 let toastTimeout = null;
+
+let rjoy = { id: -1, x0: 0, y0: 0, dx: 0, dy: 0 };
+
+const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
+
+function showRightJoycon(x, y) {
+  const base = document.getElementById('joy-right-base');
+  if (base) {
+    base.style.left = x + 'px';
+    base.style.top = y + 'px';
+    base.style.display = 'block';
+  }
+}
+
+function updateRightJoyconKnob(dx, dy) {
+  const knob = document.getElementById('joy-right-knob');
+  if (knob) {
+    knob.style.transform = `translate(calc(-50% + ${dx * 25}px), calc(-50% + ${dy * 25}px))`;
+  }
+}
+
+function hideRightJoycon() {
+  const base = document.getElementById('joy-right-base');
+  const knob = document.getElementById('joy-right-knob');
+  if (base) base.style.display = 'none';
+  if (knob) knob.style.transform = 'translate(-50%, -50%)';
+}
 
 export function registerRadialHelpers(helpers) {
   if (helpers && helpers.setAll) {
@@ -30,11 +56,104 @@ const MENUS = {
   main: {
     title: '📜 ORDENS DO CAPITÃO',
     items: [
-      { id: 'anchor', label: 'Âncora', icon: '⚓', target: 'anchor' },
-      { id: 'sails', label: 'Velas', icon: '⛵', target: 'sails' },
-      { id: 'helm', label: 'Leme', icon: '☸️', target: 'helm' },
-      { id: 'camera', label: 'Câmera', icon: '👁️', target: 'camera' },
-      { id: 'close', label: 'Fechar', icon: '✕', action: closeRadialMenu }
+      {
+        id: 'sails_up',
+        label: 'Içar 100%',
+        icon: '⛵',
+        desc: 'Abre 100% de todas as velas para velocidade máxima',
+        action: () => {
+          if (setAllFn) setAllFn(1);
+          showOrderToast('📜 Capitão ordenou: Içar todas as velas (100%)!');
+          closeRadialMenu();
+        }
+      },
+      {
+        id: 'sails_half',
+        label: 'Meia Vela',
+        icon: '⛵',
+        desc: 'Abre 50% das velas para navegação moderada',
+        action: () => {
+          if (setAllFn) setAllFn(0.5);
+          showOrderToast('📜 Capitão ordenou: Meia vela (50%)!');
+          closeRadialMenu();
+        }
+      },
+      {
+        id: 'sails_down',
+        label: 'Arriar Velas',
+        icon: '⛵',
+        desc: 'Recolhe todas as velas (0% velocidade)',
+        action: () => {
+          if (setAllFn) setAllFn(0);
+          showOrderToast('📜 Capitão ordenou: Arriar todas as velas!');
+          closeRadialMenu();
+        }
+      },
+      {
+        id: 'anchor',
+        label: 'Âncora',
+        icon: '⚓',
+        desc: 'Baixa ou içar a âncora do galeão',
+        action: () => {
+          AN.t = AN.t > 0.5 ? 0 : 1;
+          showOrderToast('📜 Capitão ordenou: ' + (AN.t > 0.5 ? 'Baixar Âncora!' : 'Subir Âncora!'));
+          closeRadialMenu();
+        }
+      },
+      {
+        id: 'cam_free',
+        label: 'Olhar Livre',
+        icon: '👁️',
+        desc: 'Alterna o modo olhar livre do capitão',
+        action: () => {
+          INT.tFree = !INT.tFree;
+          showOrderToast('📜 Capitão: Olhar livre ' + (INT.tFree ? 'ativado' : 'desativado'));
+          closeRadialMenu();
+        }
+      },
+      {
+        id: 'rigs_port',
+        label: 'Vergas (Esq)',
+        icon: '⬅',
+        desc: 'Gira vergas a Bombordo (Esquerda)',
+        action: () => {
+          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = -g.lim);
+          showOrderToast('📜 Capitão ordenou: Vergas a Bombordo!');
+          closeRadialMenu();
+        }
+      },
+      {
+        id: 'rigs_center',
+        label: 'Vergas (Centro)',
+        icon: '🎯',
+        desc: 'Centraliza todas as vergas a 0°',
+        action: () => {
+          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = 0);
+          showOrderToast('📜 Capitão ordenou: Centralizar vergas!');
+          closeRadialMenu();
+        }
+      },
+      {
+        id: 'rigs_star',
+        label: 'Vergas (Dir)',
+        icon: '➔',
+        desc: 'Gira vergas a Estibordo (Direita)',
+        action: () => {
+          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = g.lim);
+          showOrderToast('📜 Capitão ordenou: Vergas a Estibordo!');
+          closeRadialMenu();
+        }
+      }
+    ]
+  },
+  submenus: {
+    title: '⚙️ CATEGORIAS DE ORDENS',
+    items: [
+      { id: 'anc_menu', label: 'Âncora', icon: '⚓', desc: 'Opções de Âncora', target: 'anchor' },
+      { id: 'sail_menu', label: 'Velas', icon: '⛵', desc: 'Abertura das Velas', target: 'sails' },
+      { id: 'rig_menu', label: 'Vergas', icon: '🔄', desc: 'Rotação das Vergas', target: 'rigs' },
+      { id: 'cam_menu', label: 'Câmera', icon: '👁️', desc: 'Modos de Visão', target: 'camera' },
+      { id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar à roda principal', target: 'main' }
     ]
   },
   anchor: {
@@ -44,6 +163,7 @@ const MENUS = {
         id: 'anc_drop',
         label: 'Baixar Âncora',
         icon: '⚓⬇',
+        desc: 'Solta a âncora até o fundo do oceano',
         action: () => {
           AN.t = 1;
           showOrderToast('📜 Capitão ordenou: Baixar Âncora!');
@@ -54,13 +174,14 @@ const MENUS = {
         id: 'anc_raise',
         label: 'Subir Âncora',
         icon: '⚓⬆',
+        desc: 'Recolhe a âncora para navegar',
         action: () => {
           AN.t = 0;
           showOrderToast('📜 Capitão ordenou: Subir Âncora!');
           closeRadialMenu();
         }
       },
-      { id: 'back', label: 'Voltar', icon: '↩', target: 'main' }
+      { id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar ao menu anterior', target: 'submenus' }
     ]
   },
   sails: {
@@ -70,6 +191,7 @@ const MENUS = {
         id: 's100',
         label: 'Içar 100%',
         icon: '⛵',
+        desc: 'Abre 100% de todas as velas',
         action: () => {
           if (setAllFn) setAllFn(1);
           showOrderToast('📜 Capitão ordenou: Içar todas as velas (100%)');
@@ -80,6 +202,7 @@ const MENUS = {
         id: 's50',
         label: 'Meia Vela',
         icon: '⛵',
+        desc: 'Abre 50% de todas as velas',
         action: () => {
           if (setAllFn) setAllFn(0.5);
           showOrderToast('📜 Capitão ordenou: Meia vela (50%)');
@@ -90,49 +213,54 @@ const MENUS = {
         id: 's0',
         label: 'Arriar Velas',
         icon: '⛵',
+        desc: 'Recolhe 100% de todas as velas',
         action: () => {
           if (setAllFn) setAllFn(0);
           showOrderToast('📜 Capitão ordenou: Arriar todas as velas');
           closeRadialMenu();
         }
       },
-      { id: 'back', label: 'Voltar', icon: '↩', target: 'main' }
+      { id: 'rigs', label: 'Girar Vergas', icon: '🔄', desc: 'Orientação do ângulo do vento', target: 'rigs' },
+      { id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar ao menu anterior', target: 'submenus' }
     ]
   },
-  helm: {
-    title: '☸️ ORDENS: LEME',
+  rigs: {
+    title: '🔄 ORDENS: GIRAR VERGAS (VELAS)',
     items: [
       {
-        id: 'h0',
-        label: 'Centralizar',
-        icon: '☸️',
-        action: () => {
-          HM.t = 0;
-          showOrderToast('📜 Capitão ordenou: Leme ao centro');
-          closeRadialMenu();
-        }
-      },
-      {
-        id: 'hport',
-        label: 'Tudo Bombordo',
+        id: 'rot_port',
+        label: 'Girar Bombordo',
         icon: '⬅',
+        desc: 'Gira vergas totalmente para a esquerda',
         action: () => {
-          HM.t = -1;
-          showOrderToast('📜 Capitão ordenou: Tudo a Bombordo (Esquerda)!');
+          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = -g.lim);
+          showOrderToast('📜 Capitão ordenou: Girar vergas a Bombordo (Esquerda)!');
           closeRadialMenu();
         }
       },
       {
-        id: 'hstar',
-        label: 'Tudo Estibordo',
-        icon: '➔',
+        id: 'rot_center',
+        label: 'Centralizar',
+        icon: '🎯',
+        desc: 'Alinha vergas retas a 0°',
         action: () => {
-          HM.t = 1;
-          showOrderToast('📜 Capitão ordenou: Tudo a Estibordo (Direita)!');
+          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = 0);
+          showOrderToast('📜 Capitão ordenou: Centralizar vergas das velas');
           closeRadialMenu();
         }
       },
-      { id: 'back', label: 'Voltar', icon: '↩', target: 'main' }
+      {
+        id: 'rot_starboard',
+        label: 'Girar Estibordo',
+        icon: '➔',
+        desc: 'Gira vergas totalmente para a direita',
+        action: () => {
+          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = g.lim);
+          showOrderToast('📜 Capitão ordenou: Girar vergas a Estibordo (Direita)!');
+          closeRadialMenu();
+        }
+      },
+      { id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar ao menu anterior', target: 'sails' }
     ]
   },
   camera: {
@@ -142,6 +270,7 @@ const MENUS = {
         id: 'cam_free',
         label: 'Olhar Livre',
         icon: '👁️',
+        desc: 'Ativa / desativa o modo olhar livre',
         action: () => {
           INT.tFree = !INT.tFree;
           showOrderToast('📜 Capitão: ' + (INT.tFree ? 'Olhar livre ativado' : 'Olhar livre desativado'));
@@ -152,13 +281,14 @@ const MENUS = {
         id: 'cam_orbit',
         label: 'Visão Orbital',
         icon: '🎥',
+        desc: 'Muda para câmera orbital em 3a pessoa',
         action: () => {
           setFpv(false);
           showOrderToast('📜 Mudando para Câmera Orbital');
           closeRadialMenu();
         }
       },
-      { id: 'back', label: 'Voltar', icon: '↩', target: 'main' }
+      { id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar ao menu anterior', target: 'submenus' }
     ]
   }
 };
@@ -171,6 +301,8 @@ export function openRadialMenu(menuKey = 'main') {
   isOpen = true;
   activeMenu = menuKey;
   selectedIndex = -1;
+  rjoy.id = -1;
+  hideRightJoycon();
   const overlay = document.getElementById('radial-orders-overlay');
   if (overlay) {
     overlay.style.display = 'flex';
@@ -181,6 +313,8 @@ export function openRadialMenu(menuKey = 'main') {
 export function closeRadialMenu() {
   isOpen = false;
   selectedIndex = -1;
+  rjoy.id = -1;
+  hideRightJoycon();
   const overlay = document.getElementById('radial-orders-overlay');
   if (overlay) {
     overlay.style.display = 'none';
@@ -198,48 +332,99 @@ export function updateRadialOrdersVisibility() {
   }
 }
 
+function sectorPath(rIn, rOut, a1, a2) {
+  const x1 = Math.cos(a1) * rOut, y1 = Math.sin(a1) * rOut;
+  const x2 = Math.cos(a2) * rOut, y2 = Math.sin(a2) * rOut;
+  const x3 = Math.cos(a2) * rIn, y3 = Math.sin(a2) * rIn;
+  const x4 = Math.cos(a1) * rIn, y4 = Math.sin(a1) * rIn;
+  const largeArc = (a2 - a1) > Math.PI ? 1 : 0;
+  return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} L ${x3.toFixed(1)} ${y3.toFixed(1)} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x4.toFixed(1)} ${y4.toFixed(1)} Z`;
+}
+
 function renderRadialMenu() {
   const menu = MENUS[activeMenu] || MENUS.main;
   const titleEl = document.getElementById('radial-title');
   if (titleEl) titleEl.textContent = menu.title;
 
-  const container = document.getElementById('radial-slices-container');
-  if (!container) return;
-  container.innerHTML = '';
+  const slicesGroup = document.getElementById('gta-slices-group');
+  if (!slicesGroup) return;
+  slicesGroup.innerHTML = '';
 
   const items = menu.items;
   const total = items.length;
-  // Posiciona fatias ao redor do círculo em pixels
-  const radius = 110; // raio do menu radial
+  if (!total) return;
+
+  const rIn = 56;
+  const rOut = 140;
+  const step = (2 * Math.PI) / total;
+  const gap = total > 4 ? 0.03 : 0.02;
 
   items.forEach((item, index) => {
-    // Começa no topo (-PI/2) e distribui uniformemente
-    const angle = (index * (2 * Math.PI / total)) - (Math.PI / 2);
-    const x = Math.round(Math.cos(angle) * radius);
-    const y = Math.round(Math.sin(angle) * radius);
+    const centerAngle = (index * step) - (Math.PI / 2);
+    const a1 = centerAngle - (step / 2) + gap;
+    const a2 = centerAngle + (step / 2) - gap;
 
-    const btn = document.createElement('button');
-    btn.className = 'radial-slice' + (index === selectedIndex ? ' active' : '');
-    btn.setAttribute('data-index', index);
-    btn.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+    const pathD = sectorPath(rIn, rOut, a1, a2);
+    const isActive = (index === selectedIndex);
 
-    btn.innerHTML = `
-      <span class="slice-icon">${item.icon}</span>
-      <span class="slice-label">${item.label}</span>
-    `;
+    const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    pathEl.setAttribute('d', pathD);
+    pathEl.setAttribute('class', 'gta-slice-path' + (isActive ? ' active' : ''));
 
-    btn.onclick = (e) => {
+    pathEl.onclick = (e) => {
       e.stopPropagation();
       executeItem(item);
     };
 
-    container.appendChild(btn);
+    slicesGroup.appendChild(pathEl);
+
+    // Ícone e Texto
+    const rMid = (rIn + rOut) / 2;
+    const tx = Math.cos(centerAngle) * rMid;
+    const ty = Math.sin(centerAngle) * rMid;
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.style.pointerEvents = 'none';
+
+    const iconText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    iconText.setAttribute('x', tx.toFixed(1));
+    iconText.setAttribute('y', (ty - 7).toFixed(1));
+    iconText.setAttribute('text-anchor', 'middle');
+    iconText.setAttribute('dominant-baseline', 'middle');
+    iconText.setAttribute('font-size', '18');
+    iconText.textContent = item.icon;
+
+    const labelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    labelText.setAttribute('x', tx.toFixed(1));
+    labelText.setAttribute('y', (ty + 10).toFixed(1));
+    labelText.setAttribute('text-anchor', 'middle');
+    labelText.setAttribute('dominant-baseline', 'middle');
+    labelText.setAttribute('font-size', '9');
+    labelText.setAttribute('font-weight', 'bold');
+    labelText.setAttribute('class', 'gta-slice-text-label');
+    labelText.setAttribute('fill', isActive ? '#110b06' : '#fff9ed');
+    labelText.textContent = item.label;
+
+    g.appendChild(iconText);
+    g.appendChild(labelText);
+    slicesGroup.appendChild(g);
   });
 
+  // Hub Central
   const hubIcon = document.getElementById('radial-hub-icon');
   const hubText = document.getElementById('radial-hub-text');
-  if (hubIcon) hubIcon.textContent = activeMenu === 'main' ? '⚓' : '↩';
-  if (hubText) hubText.textContent = activeMenu === 'main' ? 'FECHAR' : 'VOLTAR';
+  const hubDesc = document.getElementById('radial-hub-desc');
+
+  if (selectedIndex >= 0 && items[selectedIndex]) {
+    const cur = items[selectedIndex];
+    if (hubIcon) hubIcon.textContent = cur.icon || '⚓';
+    if (hubText) hubText.textContent = cur.label || 'ORDEM';
+    if (hubDesc) hubDesc.textContent = cur.desc || 'Solte o Joycon para executar';
+  } else {
+    if (hubIcon) hubIcon.textContent = activeMenu === 'main' ? '⚓' : '↩';
+    if (hubText) hubText.textContent = activeMenu === 'main' ? 'ORDENS DO CAPITÃO' : 'VOLTAR';
+    if (hubDesc) hubDesc.textContent = 'Gire em 360° e solte';
+  }
 }
 
 function executeItem(item) {
@@ -252,15 +437,18 @@ function executeItem(item) {
   }
 }
 
-// Seleção direcional (Joycon Direito ou Toque / Mouse Drag)
+// Seleção direcional analógica por vetor (dx, dy)
 export function updateRadialSelectionByDirection(dx, dy) {
   if (!isOpen) return;
   const menu = MENUS[activeMenu] || MENUS.main;
   const items = menu.items;
   const total = items.length;
+  if (!total) return;
+
   const dist = Math.hypot(dx, dy);
 
-  if (dist < 0.18) {
+  // Insensível se o deslocamento for insignificante
+  if (dist < 0.12 && Math.abs(dx) < 8 && Math.abs(dy) < 8) {
     if (selectedIndex !== -1) {
       selectedIndex = -1;
       renderRadialMenu();
@@ -268,15 +456,21 @@ export function updateRadialSelectionByDirection(dx, dy) {
     return;
   }
 
-  // Ângulo em relação ao topo (-PI/2)
-  let angle = Math.atan2(dy, dx) + (Math.PI / 2);
-  if (angle < 0) angle += 2 * Math.PI;
+  const targetAngle = Math.atan2(dy, dx);
+  let bestIndex = 0;
+  let minDiff = Infinity;
 
-  const sliceAngle = (2 * Math.PI) / total;
-  let idx = Math.round(angle / sliceAngle) % total;
+  items.forEach((_, i) => {
+    const itemAngle = (i * (2 * Math.PI / total)) - (Math.PI / 2);
+    const diff = Math.abs(wrapAngle(targetAngle - itemAngle));
+    if (diff < minDiff) {
+      minDiff = diff;
+      bestIndex = i;
+    }
+  });
 
-  if (idx !== selectedIndex) {
-    selectedIndex = idx;
+  if (bestIndex !== selectedIndex) {
+    selectedIndex = bestIndex;
     renderRadialMenu();
   }
 }
@@ -323,10 +517,91 @@ export function setupRadialMenu(helpers) {
 
   const overlay = document.getElementById('radial-orders-overlay');
   if (overlay) {
+    overlay.onpointerdown = (e) => {
+      if (!isOpen) return;
+
+      if (e.target.closest('#radial-center-btn') || e.target.closest('.gta-slice-path')) {
+        return;
+      }
+
+      rjoy.id = e.pointerId;
+      rjoy.x0 = e.clientX;
+      rjoy.y0 = e.clientY;
+      rjoy.dx = rjoy.dy = 0;
+      showRightJoycon(rjoy.x0, rjoy.y0);
+      try { overlay.setPointerCapture(e.pointerId); } catch (_) {}
+    };
+
+    overlay.onpointermove = (e) => {
+      if (!isOpen) return;
+
+      if (e.pointerId === rjoy.id) {
+        const maxDist = 40;
+        rjoy.dx = (e.clientX - rjoy.x0) / maxDist;
+        rjoy.dy = (e.clientY - rjoy.y0) / maxDist;
+        const dist = Math.hypot(rjoy.dx, rjoy.dy);
+        const clampedDx = dist > 1 ? rjoy.dx / dist : rjoy.dx;
+        const clampedDy = dist > 1 ? rjoy.dy / dist : rjoy.dy;
+
+        updateRightJoyconKnob(clampedDx, clampedDy);
+        updateRadialSelectionByDirection(rjoy.dx, rjoy.dy);
+      } else if (e.pointerType === 'mouse' && rjoy.id < 0) {
+        const wheel = document.getElementById('radial-wheel');
+        if (wheel) {
+          const rect = wheel.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          updateRadialSelectionByDirection(e.clientX - centerX, e.clientY - centerY);
+        }
+      }
+    };
+
+    overlay.onpointerup = overlay.onpointercancel = (e) => {
+      if (!isOpen) return;
+
+      if (e.pointerId === rjoy.id) {
+        rjoy.id = -1;
+        hideRightJoycon();
+        executeSelectedRadialAction();
+      }
+    };
+
     overlay.onclick = (e) => {
       if (e.target === overlay) {
         closeRadialMenu();
       }
     };
   }
+
+  // Suporte a Teclado no Menu Radial
+  window.addEventListener('keydown', (e) => {
+    if (!isOpen) return;
+
+    if (e.code === 'Escape') {
+      e.stopPropagation();
+      if (activeMenu !== 'main') {
+        openRadialMenu('main');
+      } else {
+        closeRadialMenu();
+      }
+      return;
+    }
+
+    let dx = 0, dy = 0;
+    if (e.code === 'KeyW' || e.code === 'ArrowUp') dy = -1;
+    if (e.code === 'KeyS' || e.code === 'ArrowDown') dy = 1;
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') dx = -1;
+    if (e.code === 'KeyD' || e.code === 'ArrowRight') dx = 1;
+
+    if (dx !== 0 || dy !== 0) {
+      e.stopPropagation();
+      updateRadialSelectionByDirection(dx, dy);
+      return;
+    }
+
+    if (e.code === 'Enter' || e.code === 'Space') {
+      e.stopPropagation();
+      executeSelectedRadialAction();
+    }
+  });
 }

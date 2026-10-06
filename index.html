@@ -75,22 +75,26 @@
 <!-- Banner Toast de Notificação de Ordem do Capitão -->
 <div id="order-toast" class="order-toast-banner"></div>
 
-<!-- Overlay do Menu Radial de Ordens do Capitão -->
+<!-- Overlay do Menu Radial de Ordens do Capitão (Estilo GTA V / Sea of Thieves) -->
 <div id="radial-orders-overlay" class="radial-overlay" style="display: none;">
   <div class="radial-menu-container">
     <div id="radial-title" class="radial-menu-title">📜 ORDENS DO CAPITÃO</div>
     
-    <div class="radial-wheel" id="radial-wheel">
-      <button id="radial-center-btn" class="radial-center-hub" title="Fechar / Voltar">
-        <span class="hub-icon" id="radial-hub-icon">⚓</span>
-        <span class="hub-text" id="radial-hub-text">FECHAR</span>
-      </button>
+    <div class="gta-radial-wrapper" id="radial-wheel">
+      <svg id="gta-radial-svg" viewBox="-150 -150 300 300" class="gta-radial-svg">
+        <g id="gta-slices-group"></g>
+      </svg>
       
-      <div id="radial-slices-container"></div>
+      <!-- Hub Central GTA V -->
+      <div id="radial-center-btn" class="gta-center-hub">
+        <div class="hub-emblem" id="radial-hub-icon">⚓</div>
+        <div class="hub-label" id="radial-hub-text">ORDENS DO CAPITÃO</div>
+        <div class="hub-sub" id="radial-hub-desc">Gire o Joycon em 360° e solte</div>
+      </div>
     </div>
     
     <div id="radial-hint" class="radial-menu-hint">
-      Use o Joycon Direito / Arrraste o toque ou clique na ação desejada
+      Gire o Joycon Direito (360°) ou arraste o toque e SOLTE na ação desejada
     </div>
   </div>
 </div>
@@ -311,6 +315,7 @@
 <button id="gdec" class="in-game-hud">–</button>
 <button id="ginc" class="in-game-hud">+</button>
 <div id="joy-base" class="in-game-hud"><div id="joy-knob"></div></div>
+<div id="joy-right-base" class="in-game-hud" style="display: none; position: fixed; width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--acc); background: rgba(28,18,12,0.8); z-index: 2500; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 16px rgba(197, 146, 31, 0.6);"><div id="joy-right-knob" style="width: 36px; height: 36px; background: var(--acc-light); border: 2px solid var(--line); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);"></div></div>
 
 <!-- iOS Install Guide Dialog -->
 <div id="pwa-ios-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center; padding: 16px;">

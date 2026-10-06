@@ -144,9 +144,6 @@ cv.onpointerdown = e => {
 
 window.addEventListener('pointerup', e => {
   CAM.drag = false;
-  if (isRadialMenuOpen()) {
-    executeSelectedRadialAction();
-  }
   if (e.pointerId === joy.id) {
     joy.id = -1;
     joy.dx = joy.dy = 0;
@@ -159,9 +156,6 @@ window.addEventListener('pointerup', e => {
 
 window.addEventListener('pointercancel', e => {
   CAM.drag = false;
-  if (isRadialMenuOpen()) {
-    executeSelectedRadialAction();
-  }
   if (e.pointerId === joy.id) {
     joy.id = -1;
     joy.dx = joy.dy = 0;
@@ -174,16 +168,6 @@ window.addEventListener('pointercancel', e => {
 
 window.addEventListener('pointermove', e => {
   if (isRadialMenuOpen()) {
-    if (e.pointerId === joy.id) {
-      joy.dx = clamp((e.clientX - joy.x0) / 50, -1, 1);
-      joy.dy = clamp((e.clientY - joy.y0) / 50, -1, 1);
-      updateJoystickKnob(joy.dx, joy.dy);
-      updateRadialSelectionByDirection(joy.dx, joy.dy);
-    } else {
-      const dx = e.clientX - window.innerWidth / 2;
-      const dy = e.clientY - window.innerHeight / 2;
-      updateRadialSelectionByDirection(dx, dy);
-    }
     return;
   }
 
