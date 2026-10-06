@@ -369,19 +369,38 @@ sunG.traverse(o => o.frustumCulled = false);
 sc.add(sunG);
 
 export function updSun(dt) {
-  const s = S.c, v = clamp(1 - (s - .3) / .35, 0, 1);
+  const isDay = S.time >= 5.0 && S.time <= 19.0;
+  const sunVis = isDay ? (S.time < 6.0 ? (S.time - 5.0) : S.time > 18.0 ? (19.0 - S.time) : 1.0) : 0;
   const occ = cloudState.sunOcclusion;
-  const sunVis = v * (1 - 0.72 * occ);
-  sunG.visible = sunVis > .01;
+  const finalSunVis = Math.max(0, sunVis) * (1 - 0.72 * occ);
+  sunG.visible = finalSunVis > .01;
   if (!sunG.visible) return;
-  sunG.position.copy(sunL.position).multiplyScalar(5);
+
+  const sunAngle = ((S.time - 6.0) / 12.0) * Math.PI;
+  const sunDist = 90;
+  const sunX = ST.px - Math.cos(sunAngle) * sunDist;
+  const sunY = Math.sin(sunAngle) * 70;
+  const sunZ = ST.pz - 50;
+
+  sunL.position.set(sunX, Math.max(5, sunY), sunZ);
+  sunL.target.position.set(ST.px, 0, ST.pz);
+  sunL.target.updateMatrixWorld();
+
+  sunG.position.copy(sunL.position).multiplyScalar(3);
   cam.getWorldPosition(wp);
   sunG.lookAt(wp);
   const k = performance.now() * .001;
   rays.rotation.z += dt * .06;
-  sunMat[0].color.setRGB(1, 1 - .2 * s, 1 - .5 * s);
+
+  const isTwilight = (S.time >= 5.0 && S.time <= 7.0) || (S.time >= 17.0 && S.time <= 19.0);
+  if (isTwilight) {
+    sunMat[0].color.setRGB(1, 0.6, 0.2);
+  } else {
+    sunMat[0].color.setRGB(1, 0.95, 0.8);
+  }
+
   for (let i = 0; i < 4; i++) {
-    const baseOp = SO[i] * sunVis;
+    const baseOp = SO[i] * finalSunVis;
     sunMat[i].opacity = baseOp * (i > 1 ? 1 + .12 * Math.sin(k * 1.7 + i) : 1);
   }
   const occScale = 1 - 0.25 * occ;
@@ -389,10 +408,23 @@ export function updSun(dt) {
 }
 
 export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
+  let night = 0.0;
+  if (S.time >= 7.0 && S.time <= 17.0) {
+    night = 0.0;
+  } else if (S.time > 17.0 && S.time < 19.0) {
+    night = (S.time - 17.0) / 2.0;
+  } else if (S.time >= 19.0 || S.time < 5.0) {
+    night = 1.0;
+  } else if (S.time >= 5.0 && S.time < 7.0) {
+    night = 1.0 - ((S.time - 5.0) / 2.0);
+  }
+
+  const visualS = clamp(Math.max(s, night * 0.85), 0, 1);
+
   // Raios e tempestade
   LT.flash = Math.max(0, LT.flash - dt * 2.6);
   const ff = LT.flash * (.65 + .35 * Math.sin(now * .07));
-  if (s > .72) {
+  if (visualS > .72) {
     LT.nl -= dt;
     if (LT.nl < 0) {
       strike();
@@ -402,18 +434,18 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   if (LT.flash < .02) bolt.visible = false;
 
   // Céu, neblina e luzes
-  c3(SKY, s, sky);
+  c3(SKY, visualS, sky);
   sky.lerp(WH, ff * .5);
   sc.fog.color.copy(sky);
   const vdFactor = Math.max(1, (ILHAS && ILHAS.vd ? ILHAS.vd() : 2) / 2);
-  sc.fog.density = m3([.013, .017, .027], s) / vdFactor;
+  sc.fog.density = m3([.013, .017, .027], visualS) / vdFactor;
 
   // Oclusão solar atenua luz direta do sol e luz secundária
   const occ = cloudState.sunOcclusion;
-  const baseSunInt = m3([.95, .55, .1], s);
+  const baseSunInt = m3([.95, .55, .1], visualS) * (1 - night * 0.95);
   sunL.intensity = baseSunInt * (1 - 0.6 * occ);
   key.intensity = sunL.intensity * .4;
-  hemi.intensity = (m3([.62, .5, .32], s) + ff * 1.6) * (1 - 0.18 * occ);
+  hemi.intensity = (m3([.62, .5, .32], visualS) + ff * 1.6) * (1 - 0.18 * occ) * (1 - night * 0.7);
   fLight.intensity = ff * 2.2;
 
   // Lanternas quentes de popa acendem no crepúsculo/tempestade

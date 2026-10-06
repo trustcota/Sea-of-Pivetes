@@ -259,6 +259,9 @@ function loop(now) {
   const dt = Math.min((now - last) / 1000 || .016, .05);
   last = now;
 
+  // Avança o tempo do jogo (24h em 10 minutos reais = 0.04 horas por segundo)
+  S.time = (S.time + dt * 0.04) % 24;
+
   S.c += (S.t - S.c) * (1 - Math.exp(-dt * 1.1));
   const s = S.c;
 

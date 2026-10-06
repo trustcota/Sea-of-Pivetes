@@ -195,9 +195,9 @@ export function updInter(dt, rows, SL, rrows, hlm) {
       }
     }
     let ld = null;
-    if (Math.abs(fp.z) < .8 && Math.abs(fp.x) > 1.1 && fp.y < .6) {
+    if (Math.abs(fp.z - 2.1) < .8 && Math.abs(fp.x) > 1.1 && fp.y < .6) {
       const s = fp.x < 0 ? -1 : 1;
-      ld = { t: 'ladder', s, pos: new T.Vector3(s * 2, 1, 0), label: 'Escada de cordas' };
+      ld = { t: 'ladder', s, pos: new T.Vector3(s * 2, 1, 2.1), label: 'Escada de cordas' };
     }
     INT.near = ld || b;
   }
@@ -208,7 +208,8 @@ export function updInter(dt, rows, SL, rrows, hlm) {
       INT.grab = null; INT.pX = INT.pY = 0;
     } else if (INT.near) {
       if (INT.near.t === 'ladder') {
-        startClimb(INT.near.s, false);
+        const ladObj = SH.ladders.find(l => l.side === INT.near.s);
+        startClimb(ladObj, false);
         INT.ePrev = hold;
         updClimb(dt);
         return;
@@ -346,10 +347,11 @@ export function goOverboard(wdx, wdz) {
   cam.rotation.order = 'YXZ';
 }
 
-export function startClimb(s, fromWater) {
+export function startClimb(ladObj, fromWater) {
   const sh = SH.ship;
   PL.m = 'climb';
-  PL.s = s;
+  PL.ladder = ladObj;
+  PL.s = ladObj.side;
   PL.air = false;
   PL.vy = 0;
   PL.wet = false;
@@ -358,11 +360,11 @@ export function startClimb(s, fromWater) {
     sh.updateMatrixWorld(true);
     _v.set(PL.wx - ST.px, Math.max(PL.y + 1.65, H(PL.wx, PL.wz) + .15), PL.wz - ST.pz);
     sh.worldToLocal(_v);
-    PL.cy = clamp(_v.y - .65, SH.lad.bot, SH.lad.top - .2);
+    PL.cy = clamp(_v.y - .65, ladObj.botY, ladObj.topY - .2);
   } else {
-    PL.cy = SH.lad.top - .05;
+    PL.cy = ladObj.topY - .05;
   }
-  fp.yaw = s * Math.PI / 2;
+  fp.yaw = ladObj.side * Math.PI / 2;
   fp.pit = 0;
   sh.add(cam);
   cam.rotation.order = 'YXZ';
@@ -371,27 +373,33 @@ export function startClimb(s, fromWater) {
 export function dropLadder(push) {
   const ch = Math.cos(ST.hd), sh = Math.sin(ST.hd), d = PL.s * push;
   PL.vy = 0;
+  PL.ladder = null;
   goOverboard(d * ch, -d * sh);
 }
 
 export function updClimb(dt) {
-  if (!GAME.canControl) return;
-  const lad = SH.lad, E = SH.walk.edge, s = PL.s;
+  if (!GAME.canControl || !PL.ladder) return;
+  const lad = PL.ladder, s = PL.s;
   eEdge();
   const btnVal = (INT.tInc ? 1 : 0) - (INT.tDec ? 1 : 0);
   const up = clamp((keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - joy.dy + btnVal, -1, 1);
   PL.cy += up * ((keys.ShiftLeft || keys.ShiftRight) ? 1.8 : 1.1) * dt;
-  fp.x = s * (E(0, clamp(PL.cy, lad.bot, lad.top)) + .42);
-  fp.z = 0;
+  PL.cy = clamp(PL.cy, lad.botY - .5, lad.topY + .5);
+
+  const t = clamp((lad.topY - PL.cy) / (lad.topY - lad.botY), 0, 1);
+  const pt = lad.getPt(t, lad.LZ);
+  fp.x = pt.x + s * 0.32;
+  fp.z = pt.z;
   fp.y = PL.cy - 1;
+
   SH.ship.updateMatrixWorld(true);
   _v.set(fp.x, fp.y + 1.65, fp.z);
   SH.ship.localToWorld(_v);
   const wH = H(ST.px + _v.x, ST.pz + _v.z);
   if (keys.Space || INT.tJump) { dropLadder(.9); return updSwim(dt); }
   if (_v.y < wH + .12 && up < -.05) { dropLadder(.3); return updSwim(dt); }
-  if (PL.cy > lad.top + .3) {
-    PL.m = 'ship'; fp.x = s * 1.25; fp.z = 0; fp.y = .35; PL.air = false; PL.vy = 0;
+  if (PL.cy > lad.topY + .3) {
+    PL.m = 'ship'; PL.ladder = null; fp.x = s * 0.85; fp.z = 2.1; fp.y = .35; PL.air = false; PL.vy = 0;
   }
   cam.position.set(fp.x, fp.y + 1.65, fp.z);
   cam.rotation.set(fp.pit, fp.yaw, 0);
@@ -446,11 +454,25 @@ export function updSwim(dt) {
     PL.wet = false;
   }
 
-  // Casco sólido: o nadador não entra no navio
+  // Casco sólido e escadas: o nadador não atravessa
   _v.set(PL.wx - ST.px, PL.y + 1.6, PL.wz - ST.pz);
   sh.worldToLocal(_v);
-  if (_v.z > -6.4 && _v.z < 6.1) {
-    const yc = clamp(_v.y, -1.3, WK.rY(_v.z)), hwd = WK.edge(_v.z, yc) + .3;
+  const lz = _v.z, ly = _v.y;
+  if (lz > -6.4 && lz < 6.1) {
+    const yc = clamp(ly, -1.3, WK.rY(lz)), hullEdge = WK.edge(lz, yc);
+    let hwd = hullEdge + .3;
+
+    // Colisão extra para as escadas dinâmicas
+    if (Math.abs(lz - 2.1) < .8) {
+      for (const lad of SH.ladders) {
+        const t = clamp((lad.topY - ly) / (lad.topY - lad.botY), 0, 1);
+        const pt = lad.getPt(t, lad.LZ);
+        if (Math.abs(lz - pt.z) < .4) {
+          hwd = Math.max(hwd, Math.abs(pt.x) + .35);
+        }
+      }
+    }
+
     if (Math.abs(_v.x) < hwd) {
       _v.x = (_v.x < 0 ? -1 : 1) * hwd;
       sh.localToWorld(_v);
@@ -461,28 +483,33 @@ export function updSwim(dt) {
 
   // Escada ao alcance?
   const ey = Math.max(PL.y + 1.65, hw + .15);
-  let lad = 0;
+  let nearLad = null;
   _v.set(PL.wx - ST.px, ey, PL.wz - ST.pz);
   sh.worldToLocal(_v);
-  if (PL.wet && Math.abs(_v.z) < .85 && _v.y > -1.5 && _v.y < 1.5) {
-    const gap = Math.abs(_v.x) - WK.edge(0, clamp(_v.y, SH.lad.bot, SH.lad.top));
-    if (gap > -.3 && gap < 1.1) lad = _v.x < 0 ? -1 : 1;
+  if (PL.wet && Math.abs(_v.z - 2.1) < .85 && _v.y > -1.5 && _v.y < 1.5) {
+    for (const lad of SH.ladders) {
+      const t = clamp((lad.topY - _v.y) / (lad.topY - lad.botY), 0, 1);
+      const pt = lad.getPt(t, lad.LZ);
+      const dx = Math.abs(_v.x) - Math.abs(pt.x);
+      const dz = Math.abs(_v.z - pt.z);
+      if (dx > -.3 && dx < .8 && dz < .5) nearLad = lad;
+    }
   }
-  if (eEdge() && lad) {
-    startClimb(lad, true);
+  if (eEdge() && nearLad) {
+    startClimb(nearLad, true);
     return updClimb(dt);
   }
 
   cam.position.set(PL.wx - ST.px, PL.y + 1.65, PL.wz - ST.pz);
   cam.rotation.set(fp.pit, fp.yaw, 0);
 
-  const msg = lad
+  const msg = nearLad
     ? 'Escada [E]'
     : curTerH >= ILHAS.SEA
       ? 'Na ilha'
       : 'Na água';
 
-  hudMode(msg, lad ? 'Escada' : null);
+  hudMode(msg, nearLad ? 'Escada' : null);
 }
 
 export function updFPV(dt, rows, SL, rrows, hlm) {

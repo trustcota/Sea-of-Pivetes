@@ -16,7 +16,7 @@ export const SH = (() => {
   const wood = M('#6d4325'), dark = M('#3a2413'), gold = M('#dcab3b', { roughness: .6 }), iron = M('#2b2e35', { roughness: .6 }),
     rp = M('#cdb68a'), sailM = M('#f0e4c6'), blk = M('#17171b'), wht = M('#f1ece0'), vc = M('#ffffff', { vertexColors: true }),
     glow = M('#ffd36a', { emissive: '#ffb43a', emissiveIntensity: .9 });
-  const add = (g, m, x = 0, y = 0, z = 0, p = ship) => { const o = new T.Mesh(g, m); o.position.set(x, y, z); p.add(o); return o };
+  const add = (g, m, x = 0, y = 0, z = 0, p = ship) => { const o = new T.Mesh(g, m); o.position.set(x, y, z); o.castShadow = true; o.receiveShadow = true; p.add(o); return o };
   const box = (w, h, d, m, x, y, z, p) => add(new T.BoxGeometry(w, h, d), m, x, y, z, p);
   const cyl = (a, b, h, s, m, x, y, z, p) => add(new T.CylinderGeometry(a, b, h, s), m, x, y, z, p);
   const rope = (a, b, r = .03, m = rp, s = 5, sag = 0) => {
@@ -204,13 +204,62 @@ export const SH = (() => {
   const fl = new T.Group(), cl = new T.Group(), j1 = jolly(), j2 = jolly();
   fl.position.set(0, 10.85, .2); cl.rotation.y = Math.PI / 2; cl.position.z = -.95; j2.rotation.y = Math.PI;
   cl.add(new T.Mesh(new T.PlaneGeometry(1.9, 1.2), blk), j1, j2); fl.add(cl); ship.add(fl);
-  /* Escadas de cordas nas laterais centrais (z=0): da amurada até abaixo da linha d'água, coladas ao casco */
-  const cz = z => Math.max(-5.99, Math.min(5.99, z)), LD = { top: L(S, 0) + .05, bot: -1.05 }, ldx = (s, y) => s * (edge(0, y) + .07);
+  /* Escadas de cordas nas laterais (z=2.1): fixas na borda superior e soltas com física abaixo */
+  const cz = z => Math.max(-5.99, Math.min(5.99, z)), LZ = 2.1, LD = { top: L(S, LZ) + .05, bot: -1.05 };
+  const ladders = [];
   for (const s of [1, -1]) {
-    const nR = 11, y0 = LD.top - .12, ys = Array.from({ length: nR + 1 }, (_, k) => y0 - (y0 - LD.bot) * k / nR);
-    box(.16, .1, .7, iron, s * L(W, 0), LD.top - .02, 0);
-    for (const zz of [-.24, .24]) { rope([s * L(W, 0), LD.top, zz], [ldx(s, ys[0]), ys[0], zz], .032); for (let k = 0; k < nR; k++) rope([ldx(s, ys[k]), ys[k], zz], [ldx(s, ys[k + 1]), ys[k + 1], zz], .032) }
-    ys.forEach(y => box(.07, .07, .6, wood, ldx(s, y) + s * .03, y, 0))
+    const nR = 10, xRail = s * L(W, LZ);
+    box(.16, .1, .7, iron, xRail, LD.top - .02, LZ);
+    const zOffsets = [LZ - .24, LZ + .24];
+    const ropeSegs = zOffsets.map(zz => {
+      const segs = [];
+      for (let k = 0; k < nR; k++) segs.push(own(dr(.032, rp)));
+      return { zz, segs };
+    });
+    const rungs = [];
+    for (let k = 0; k <= nR; k++) rungs.push(box(.07, .07, .6, wood, 0, 0, 0));
+
+    const ladderObj = {
+      side: s, xRail, topY: LD.top, botY: LD.bot, nR, zOffsets, ropeSegs, rungs, LZ,
+      swingX: 0, swingZ: 0, velX: 0, velZ: 0,
+      waveX: 0, waveZ: 0,
+      getPt(t, zz) {
+        const y = this.topY - t * (this.topY - this.botY);
+        const inf = t * t;
+        const x = this.xRail + this.side * .08 + inf * (this.swingX + this.waveX);
+        const z = zz + inf * (this.swingZ + this.waveZ);
+        return V(x, y, z);
+      },
+      upd(dt, tt, roll, pitch, svx, svz, wx, wz) {
+        const targetX = this.side * (.2 + Math.abs(roll) * .7) + wx * .12 - svx * .06;
+        const targetZ = wz * .12 - svz * .06;
+        this.velX += ((targetX - this.swingX) * 10 - this.velX * 2.5) * dt;
+        this.velZ += ((targetZ - this.swingZ) * 10 - this.velZ * 2.5) * dt;
+        this.swingX += this.velX * dt;
+        this.swingZ += this.velZ * dt;
+
+        this.waveX = Math.sin(tt * 3.5 + this.side * 2) * (.05 + Math.abs(roll) * .1);
+        this.waveZ = Math.cos(tt * 2.8) * (.05 + Math.abs(pitch) * .1);
+
+        this.ropeSegs.forEach(({ zz, segs }) => {
+          for (let k = 0; k < this.nR; k++) {
+            const p1 = this.getPt(k / this.nR, zz);
+            const p2 = this.getPt((k + 1) / this.nR, zz);
+            setR(segs[k], p1, p2);
+          }
+        });
+
+        for (let k = 0; k <= this.nR; k++) {
+          const t = k / this.nR;
+          const p1 = this.getPt(t, this.zOffsets[0]);
+          const p2 = this.getPt(t, this.zOffsets[1]);
+          const rung = this.rungs[k];
+          rung.position.copy(p1).add(p2).multiplyScalar(.5);
+          rung.rotation.y = this.side * (this.swingX * .2);
+        }
+      }
+    };
+    ladders.push(ladderObj);
   }
   /* Caminhada: altura do chão, degraus, amurada e obstáculos */
   const gy = (x, z) => {
@@ -218,7 +267,7 @@ export const SH = (() => {
     if (ax > .45 && ax < 1.35 && z < -1.35) return .35 + .28 * (Math.min(2, Math.floor((-1.35 - z) / .3)) + 1);
     if (ax < .6 && Math.abs(z + .9) < .6) return .49; return .35
   };
-  const ob = [[0, 2.2, .34], [0, .2, .36], [0, -3.3, .29], [0, -4.6, .55], [-1.2, -5.7, .22], [1.2, -5.7, .22]];
+  const ob = [[0, 2.2, .34], [0, .2, .36], [0, -3.3, .29], [0, -4.6, .55], [-1.2, -5.7, .22], [1.2, -5.7, .22], [1.25, 2.1, .3], [-1.25, 2.1, .3]];
   const walk = {
     g: gy, ok: (x, z, px, pz) => {
       if (z < -5.7 || z > 4.3) return 0; const y = gy(x, z); if (y - gy(px, pz) > .45 || Math.abs(x) > edge(z, y) - .22) return 0;
@@ -233,7 +282,7 @@ export const SH = (() => {
   const arope = cyl(.04, .04, 1, 5, rp, .88, 1, 3.9); arope.frustumCulled = false;
   inter.push({ t: 'anchor', pos: V(0, .35, 2.2), label: 'Âncora (cabrestante)' });
   inter.push({ t: 'helm', pos: V(0, 2.15, -4.6), label: 'Leme' });
-  return { ship, fl, mats, sails, rigs, walk, inter, wh, helm: HM, anc, arope, cap, lad: LD, whg: whm.map(o => G(o, 'h')), lanternLights }
+  return { ship, fl, mats, sails, rigs, walk, inter, wh, helm: HM, anc, arope, cap, lad: LD, ladders, whg: whm.map(o => G(o, 'h')), lanternLights }
 })();
 
 export const ship = SH.ship;

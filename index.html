@@ -107,105 +107,117 @@
       <h2>Ajustes Náuticos</h2>
       <button id="btn-close-settings" class="modal-close-btn" title="Fechar">✕</button>
     </div>
+    <div class="settings-tabs-header">
+      <button class="settings-tab-btn active" data-tab="graficos">Gráficos</button>
+      <button class="settings-tab-btn" data-tab="maritimo">Marítimo</button>
+      <button class="settings-tab-btn" data-tab="terreno">Terreno</button>
+    </div>
     <div class="modal-body">
-      <div class="settings-group">
-        <label class="settings-label">Condição do Oceano</label>
-        <div class="settings-btn-grid">
-          <button class="opt-btn" data-modal-sea="0.04">Calmo</button>
-          <button class="opt-btn" data-modal-sea="0.5">Ondas</button>
-          <button class="opt-btn" data-modal-sea="1">Tempestade</button>
+      <!-- Tab 1: Gráficos -->
+      <div class="settings-tab-pane active" data-pane="graficos">
+        <div class="settings-group">
+          <div class="label-with-val">
+            <label for="modal-mapa-rg">Alcance de Visão (Render)</label>
+            <span id="modal-mapa-rg-val">80 m</span>
+          </div>
+          <input id="modal-mapa-rg" type="range" min="2" max="20" step="1" value="2">
+          <div class="settings-btn-grid" style="margin-top: 6px;">
+            <button class="opt-btn" data-modal-vd="2">Curto</button>
+            <button class="opt-btn" data-modal-vd="4">Médio</button>
+            <button class="opt-btn" data-modal-vd="8">Longo</button>
+            <button class="opt-btn" data-modal-vd="15">Máximo</button>
+          </div>
         </div>
-      </div>
-      <div class="settings-group">
-        <div class="label-with-val">
-          <label for="modal-sl">Intensidade das Ondas</label>
-          <span id="modal-sl-val">4%</span>
+        <div class="settings-group">
+          <label class="settings-label">Opções Gráficas</label>
+          <div class="settings-btn-grid" style="grid-template-columns: 1fr 1fr;">
+            <button id="modal-ar" class="opt-btn on">Girar Câmera</button>
+            <button id="modal-wf" class="opt-btn">Mostrar Malha</button>
+          </div>
         </div>
-        <input id="modal-sl" type="range" min="0" max="100" value="4">
-      </div>
-      <div class="settings-group">
-        <div class="label-with-val">
-          <label for="modal-wsl">Força do Vento</label>
-          <span id="modal-wsl-val">15%</span>
+        <div class="settings-group" id="settings-menu-return-row" style="display: none; margin-top: 12px;">
+          <button id="btn-return-menu" class="danger-btn">⎋ Voltar à Tela Inicial</button>
         </div>
-        <input id="modal-wsl" type="range" min="0" max="100" value="15">
-      </div>
-      <div class="settings-group">
-        <label class="settings-label">Direção Rápida do Vento</label>
-        <div class="settings-btn-grid">
-          <button id="modal-w0" class="opt-btn">Popa</button>
-          <button id="modal-w1" class="opt-btn">Través</button>
-          <button id="modal-w2" class="opt-btn">Bolina</button>
-        </div>
-      </div>
-      <div class="settings-group">
-        <div class="label-with-val">
-          <label for="modal-wdr">Direção do Vento (Fina)</label>
-          <span id="modal-wdr-val">26°</span>
-        </div>
-        <input id="modal-wdr" type="range" min="0" max="359" value="26">
-      </div>
-      <div class="settings-group">
-        <div class="label-with-val">
-          <label for="modal-mapa-rg">Alcance de Visão (Ilhas)</label>
-          <span id="modal-mapa-rg-val">80 m</span>
-        </div>
-        <input id="modal-mapa-rg" type="range" min="2" max="20" step="1" value="2">
-        <div class="settings-btn-grid" style="margin-top: 6px;">
-          <button class="opt-btn" data-modal-vd="2">Curto</button>
-          <button class="opt-btn" data-modal-vd="4">Médio</button>
-          <button class="opt-btn" data-modal-vd="8">Longo</button>
-          <button class="opt-btn" data-modal-vd="15">Máximo</button>
-        </div>
-      </div>
-      
-      <!-- Configurações do Arquipélago -->
-      <div class="settings-group" style="border-top: 1px dashed rgba(28,18,12,0.15); padding-top:10px;">
-        <label class="settings-label">Geração de Ilhas (Mapa)</label>
-        <div class="settings-btn-grid" style="grid-template-columns: 1fr 1fr;">
-          <button id="modal-mapa-ns" class="opt-btn">Nova Semente</button>
-          <button id="modal-mapa-au" class="opt-btn on">Render Auto</button>
-        </div>
-      </div>
-      <div class="settings-group">
-        <div class="label-with-val">
-          <label for="modal-mapa-gh">Altura das Ilhas</label>
-          <span id="modal-mapa-gh-val">4.6</span>
-        </div>
-        <input id="modal-mapa-gh" type="range" min="2" max="12" step="0.2" value="4.6">
-      </div>
-      <div class="settings-group">
-        <div class="label-with-val">
-          <label for="modal-mapa-gd">Profundidade do Oceano</label>
-          <span id="modal-mapa-gd-val">9</span>
-        </div>
-        <input id="modal-mapa-gd" type="range" min="3" max="20" step="1" value="9">
-      </div>
-      <div class="settings-group">
-        <div class="label-with-val">
-          <label for="modal-mapa-gs">Espaçamento de Ilhas</label>
-          <span id="modal-mapa-gs-val">140</span>
-        </div>
-        <input id="modal-mapa-gs" type="range" min="120" max="300" step="5" value="140">
-      </div>
-      <div class="settings-group">
-        <div class="label-with-val">
-          <label for="modal-mapa-gn">Densidade de Ilhas</label>
-          <span id="modal-mapa-gn-val">85</span>
-        </div>
-        <input id="modal-mapa-gn" type="range" min="40" max="100" step="5" value="85">
       </div>
 
-      <!-- Opções Gráficas/Câmera -->
-      <div class="settings-group" style="border-top: 1px dashed rgba(28,18,12,0.15); padding-top:10px;">
-        <label class="settings-label">Opções Extras</label>
-        <div class="settings-btn-grid" style="grid-template-columns: 1fr 1fr;">
-          <button id="modal-ar" class="opt-btn on">Girar Câmera</button>
-          <button id="modal-wf" class="opt-btn">Mostrar Malha</button>
+      <!-- Tab 2: Marítimo -->
+      <div class="settings-tab-pane" data-pane="maritimo">
+        <div class="settings-group">
+          <label class="settings-label">Condição do Oceano</label>
+          <div class="settings-btn-grid">
+            <button class="opt-btn" data-modal-sea="0.04">Calmo</button>
+            <button class="opt-btn" data-modal-sea="0.5">Ondas</button>
+            <button class="opt-btn" data-modal-sea="1">Tempestade</button>
+          </div>
+        </div>
+        <div class="settings-group">
+          <div class="label-with-val">
+            <label for="modal-sl">Intensidade das Ondas</label>
+            <span id="modal-sl-val">4%</span>
+          </div>
+          <input id="modal-sl" type="range" min="0" max="100" value="4">
+        </div>
+        <div class="settings-group">
+          <div class="label-with-val">
+            <label for="modal-wsl">Força do Vento</label>
+            <span id="modal-wsl-val">15%</span>
+          </div>
+          <input id="modal-wsl" type="range" min="0" max="100" value="15">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">Direção Rápida do Vento</label>
+          <div class="settings-btn-grid">
+            <button id="modal-w0" class="opt-btn">Popa</button>
+            <button id="modal-w1" class="opt-btn">Través</button>
+            <button id="modal-w2" class="opt-btn">Bolina</button>
+          </div>
+        </div>
+        <div class="settings-group">
+          <div class="label-with-val">
+            <label for="modal-wdr">Direção do Vento (Fina)</label>
+            <span id="modal-wdr-val">26°</span>
+          </div>
+          <input id="modal-wdr" type="range" min="0" max="359" value="26">
         </div>
       </div>
-      <div class="settings-group" id="settings-menu-return-row" style="display: none;">
-        <button id="btn-return-menu" class="danger-btn">⎋ Voltar à Tela Inicial</button>
+
+      <!-- Tab 3: Terreno -->
+      <div class="settings-tab-pane" data-pane="terreno">
+        <div class="settings-group">
+          <label class="settings-label">Geração de Ilhas (Mapa)</label>
+          <div class="settings-btn-grid" style="grid-template-columns: 1fr 1fr;">
+            <button id="modal-mapa-ns" class="opt-btn">Nova Semente</button>
+            <button id="modal-mapa-au" class="opt-btn on">Render Auto</button>
+          </div>
+        </div>
+        <div class="settings-group">
+          <div class="label-with-val">
+            <label for="modal-mapa-gh">Altura das Ilhas</label>
+            <span id="modal-mapa-gh-val">4.6</span>
+          </div>
+          <input id="modal-mapa-gh" type="range" min="2" max="12" step="0.2" value="4.6">
+        </div>
+        <div class="settings-group">
+          <div class="label-with-val">
+            <label for="modal-mapa-gd">Profundidade do Oceano</label>
+            <span id="modal-mapa-gd-val">9</span>
+          </div>
+          <input id="modal-mapa-gd" type="range" min="3" max="20" step="1" value="9">
+        </div>
+        <div class="settings-group">
+          <div class="label-with-val">
+            <label for="modal-mapa-gs">Espaçamento de Ilhas</label>
+            <span id="modal-mapa-gs-val">140</span>
+          </div>
+          <input id="modal-mapa-gs" type="range" min="120" max="300" step="5" value="140">
+        </div>
+        <div class="settings-group">
+          <div class="label-with-val">
+            <label for="modal-mapa-gn">Densidade de Ilhas</label>
+            <span id="modal-mapa-gn-val">85</span>
+          </div>
+          <input id="modal-mapa-gn" type="range" min="40" max="100" step="5" value="85">
+        </div>
       </div>
     </div>
     <div class="modal-footer">

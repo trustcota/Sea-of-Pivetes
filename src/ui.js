@@ -1,8 +1,9 @@
 import { clamp, D2, wrapA } from './core/math.js';
-import { S, WI, ST, CAM, UIS, HM, AN, INT, keys, GAME } from './core/state.js';
+import { S, WI, ST, CAM, UIS, HM, AN, INT, keys, GAME, SETTINGS, saveSettingsState } from './core/state.js';
 import { setFpv, resetPlayer } from './ship/player.js';
 import { SH } from './ship/ship.js';
 import { ILHAS } from './world/archipelago.js';
+import { sea } from './world/ocean.js';
 import { setupRadialMenu, updateRadialOrdersVisibility } from './radialMenu.js';
 
 export const degN = r => ((Math.round(r / D2) % 360) + 360) % 360;
@@ -10,6 +11,87 @@ export const potName = g => g < 30 ? 'de popa' : g < 80 ? 'alheta' : g < 110 ? '
 
 export function setupUI(actions = {}) {
   const $ = id => document.getElementById(id);
+
+  const wsl = $('wsl'), wdr = $('wdr'), wdv = $('wdv'), hlm = $('hlm');
+  function showDir() {
+    const d = degN(WI.dir);
+    if (wdr) wdr.value = d;
+    if (wdv) wdv.textContent = d + '°';
+  }
+  function setWindStr(v) {
+    WI.str = clamp(v, 0, 1);
+    if (wsl) wsl.value = Math.round(WI.str * 100);
+  }
+
+  let mapAuto = true, mapVDm = 2, mapFa = 0, mapFn = 0, mapCool = 0;
+  const mapVB = [...document.querySelectorAll('[data-vd]')];
+
+  function setMapVD(v, isManual = false) {
+    if (isManual) mapVDm = v;
+    ILHAS.setVD(v);
+    SETTINGS.renderDist = v;
+    saveSettingsState();
+    if ($('mapa-rg')) $('mapa-rg').value = v;
+    if ($('mapa-rgv')) $('mapa-rgv').textContent = Math.round((v - .35) * ILHAS.CS) + ' m';
+    if ($('modal-mapa-rg')) $('modal-mapa-rg').value = v;
+    if ($('modal-mapa-rg-val')) $('modal-mapa-rg-val').textContent = Math.round((v - .35) * ILHAS.CS) + ' m';
+    mapVB.forEach(x => x.classList.toggle('on', +x.dataset.vd === v));
+    document.querySelectorAll('button[data-modal-vd]').forEach(x => x.classList.toggle('on', +x.dataset.modalVd === v));
+  }
+
+  // Carrega e aplica configurações salvas do localStorage
+  if (SETTINGS) {
+    if (SETTINGS.oceanCondition !== undefined) {
+      S.t = SETTINGS.oceanCondition;
+      const sl = $('sl');
+      if (sl) sl.value = S.t * 100;
+    }
+    if (SETTINGS.windStrength !== undefined) {
+      WI.str = SETTINGS.windStrength > 1 ? SETTINGS.windStrength / 100 : SETTINGS.windStrength;
+      SETTINGS.windStrength = WI.str;
+      const wsl = $('wsl');
+      if (wsl) wsl.value = Math.round(WI.str * 100);
+      const modalWsl = $('modal-wsl');
+      if (modalWsl) modalWsl.value = Math.round(WI.str * 100);
+    }
+    if (SETTINGS.windDir !== undefined) {
+      WI.dir = SETTINGS.windDir * D2;
+      showDir();
+      const modalWdr = $('modal-wdr');
+      if (modalWdr) modalWdr.value = Math.round(SETTINGS.windDir);
+    }
+    if (SETTINGS.renderDist !== undefined) {
+      setMapVD(SETTINGS.renderDist, true);
+    }
+    if (SETTINGS.terrainHeight !== undefined) {
+      ILHAS.setCfg('height', SETTINGS.terrainHeight);
+    }
+    if (SETTINGS.terrainDepth !== undefined) {
+      ILHAS.setCfg('depth', SETTINGS.terrainDepth);
+    }
+    if (SETTINGS.terrainSpacing !== undefined) {
+      ILHAS.setCfg('spacing', SETTINGS.terrainSpacing);
+    }
+    if (SETTINGS.terrainDensity !== undefined) {
+      ILHAS.setCfg('density', SETTINGS.terrainDensity / 100);
+    }
+    if (SETTINGS.autoCam !== undefined) {
+      CAM.auto = SETTINGS.autoCam;
+      const ar = $('ar');
+      if (ar) ar.classList.toggle('on', CAM.auto);
+      const modalAr = $('modal-ar');
+      if (modalAr) modalAr.classList.toggle('on', CAM.auto);
+    }
+    if (SETTINGS.wireframe) {
+      SH.mats.forEach(m => m.wireframe = true);
+      if (sea && sea.material) sea.material.wireframe = true;
+      if (ILHAS && ILHAS.setWireframe) ILHAS.setWireframe(true);
+      const wf = $('wf');
+      if (wf) wf.classList.add('on');
+      const modalWf = $('modal-wf');
+      if (modalWf) modalWf.classList.add('on');
+    }
+  }
 
   // Botões da Tela Inicial e Modais
   const btnPlay = $('btn-play');
@@ -127,6 +209,17 @@ export function setupUI(actions = {}) {
     };
   }
 
+  // Configuração das abas do painel de Ajustes
+  const tabBtns = [...document.querySelectorAll('.settings-tab-btn')];
+  const tabPanes = [...document.querySelectorAll('.settings-tab-pane')];
+  tabBtns.forEach(btn => {
+    btn.onclick = () => {
+      const target = btn.dataset.tab;
+      tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === target));
+      tabPanes.forEach(p => p.classList.toggle('active', p.dataset.pane === target));
+    };
+  });
+
   const openControls = () => { if (controlsModal) controlsModal.style.display = 'flex'; };
   const closeControls = () => { if (controlsModal) controlsModal.style.display = 'none'; };
   if (btnControls) btnControls.onclick = openControls;
@@ -140,6 +233,9 @@ export function setupUI(actions = {}) {
     if (sl) sl.value = S.t * 100;
     setWindStr(.12 + .85 * S.t);
     syncSettingsModal();
+    SETTINGS.oceanCondition = S.t;
+    SETTINGS.waveIntensity = Math.round(S.t * 100);
+    saveSettingsState();
   });
 
   const modalSl = $('modal-sl');
@@ -152,6 +248,9 @@ export function setupUI(actions = {}) {
       const valEl = $('modal-sl-val');
       if (valEl) valEl.textContent = modalSl.value + '%';
       modalSeaBtns.forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.modalSea - S.t) < 0.05));
+      SETTINGS.oceanCondition = S.t;
+      SETTINGS.waveIntensity = +modalSl.value;
+      saveSettingsState();
     };
   }
 
@@ -163,12 +262,14 @@ export function setupUI(actions = {}) {
       if (wsl) wsl.value = modalWsl.value;
       const valEl = $('modal-wsl-val');
       if (valEl) valEl.textContent = modalWsl.value + '%';
+      SETTINGS.windStrength = WI.str;
+      saveSettingsState();
     };
   }
 
   [['modal-w0', 0], ['modal-w1', Math.PI / 2], ['modal-w2', Math.PI * .62]].forEach(([id, o]) => {
     const el = $(id);
-    if (el) el.onclick = () => { WI.dir = ST.hd + o; showDir(); };
+    if (el) el.onclick = () => { WI.dir = ST.hd + o; showDir(); SETTINGS.windDir = Math.round(degN(WI.dir)); saveSettingsState(); };
   });
 
   modalVdBtns.forEach(b => b.onclick = () => {
@@ -196,60 +297,43 @@ export function setupUI(actions = {}) {
       if (wdv) wdv.textContent = modalWdr.value + '°';
       const valEl = $('modal-wdr-val');
       if (valEl) valEl.textContent = modalWdr.value + '°';
+      SETTINGS.windDir = +modalWdr.value;
+      saveSettingsState();
     };
   }
 
-  const modalGh = $('modal-mapa-gh');
-  if (modalGh) {
-    modalGh.oninput = () => {
-      const origGh = $('mapa-gh');
-      if (origGh) {
-        origGh.value = modalGh.value;
-        origGh.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      const valEl = $('modal-mapa-gh-val');
-      if (valEl) valEl.textContent = modalGh.value;
-    };
-  }
+  [['gh', 'height', false], ['gd', 'depth', false], ['gs', 'spacing', false], ['gn', 'density', true]].forEach(([id, k, isPct]) => {
+    const modalEl = $('modal-mapa-' + id);
+    const modalVal = $('modal-mapa-' + id + '-val');
+    const origEl = $('mapa-' + id);
+    const origVal = $('mapa-' + id + 'v');
 
-  const modalGd = $('modal-mapa-gd');
-  if (modalGd) {
-    modalGd.oninput = () => {
-      const origGd = $('mapa-gd');
-      if (origGd) {
-        origGd.value = modalGd.value;
-        origGd.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      const valEl = $('modal-mapa-gd-val');
-      if (valEl) valEl.textContent = modalGd.value;
+    const updateCfg = val => {
+      const cfgVal = isPct ? val / 100 : val;
+      if (modalVal) modalVal.textContent = isPct ? Math.round(val) : val;
+      if (modalEl) modalEl.value = val;
+      if (origEl) origEl.value = val;
+      if (origVal) origVal.textContent = (isPct ? Math.round(val) : val) + (isPct ? '%' : '');
+      ILHAS.setCfg(k, cfgVal);
+      if (k === 'height') SETTINGS.terrainHeight = val;
+      if (k === 'depth') SETTINGS.terrainDepth = val;
+      if (k === 'spacing') SETTINGS.terrainSpacing = val;
+      if (k === 'density') SETTINGS.terrainDensity = val;
+      saveSettingsState();
+      mapRelocate();
     };
-  }
 
-  const modalGs = $('modal-mapa-gs');
-  if (modalGs) {
-    modalGs.oninput = () => {
-      const origGs = $('mapa-gs');
-      if (origGs) {
-        origGs.value = modalGs.value;
-        origGs.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      const valEl = $('modal-mapa-gs-val');
-      if (valEl) valEl.textContent = modalGs.value;
-    };
-  }
-
-  const modalGn = $('modal-mapa-gn');
-  if (modalGn) {
-    modalGn.oninput = () => {
-      const origGn = $('mapa-gn');
-      if (origGn) {
-        origGn.value = modalGn.value;
-        origGn.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      const valEl = $('modal-mapa-gn-val');
-      if (valEl) valEl.textContent = modalGn.value;
-    };
-  }
+    if (modalEl) {
+      modalEl.value = isPct ? ILHAS.GEN[k] * 100 : ILHAS.GEN[k];
+      if (modalVal) modalVal.textContent = isPct ? Math.round(modalEl.value) : modalEl.value;
+      modalEl.oninput = () => updateCfg(+modalEl.value);
+    }
+    if (origEl) {
+      origEl.value = isPct ? ILHAS.GEN[k] * 100 : ILHAS.GEN[k];
+      if (origVal) origVal.textContent = (isPct ? Math.round(origEl.value) : origEl.value) + (isPct ? '%' : '');
+      origEl.oninput = () => updateCfg(+origEl.value);
+    }
+  });
 
   const modalNs = $('modal-mapa-ns');
   if (modalNs) {
@@ -310,10 +394,16 @@ export function setupUI(actions = {}) {
   if (ar) ar.onclick = () => {
     CAM.auto = !CAM.auto;
     ar.classList.toggle('on', CAM.auto);
+    SETTINGS.autoCam = CAM.auto;
+    saveSettingsState();
   };
   if (wf) wf.onclick = () => {
     const on = wf.classList.toggle('on');
     SH.mats.forEach(m => m.wireframe = on);
+    if (sea && sea.material) sea.material.wireframe = on;
+    if (ILHAS && ILHAS.setWireframe) ILHAS.setWireframe(on);
+    SETTINGS.wireframe = on;
+    saveSettingsState();
   };
 
   // Sliders de abertura das velas
@@ -364,17 +454,13 @@ export function setupUI(actions = {}) {
   };
 
   // Vento, rumo e leme
-  const wsl = $('wsl'), wdr = $('wdr'), wdv = $('wdv'), hlm = $('hlm');
-  function showDir() {
-    const d = degN(WI.dir);
-    if (wdr) wdr.value = d;
-    if (wdv) wdv.textContent = d + '°';
-  }
-  function setWindStr(v) {
-    WI.str = clamp(v, 0, 1);
-    if (wsl) wsl.value = Math.round(WI.str * 100);
-  }
-  if (wsl) wsl.oninput = () => { WI.str = wsl.value / 100; };
+  if (wsl) wsl.oninput = () => {
+    WI.str = wsl.value / 100;
+    const modalWsl = $('modal-wsl');
+    if (modalWsl) modalWsl.value = wsl.value;
+    SETTINGS.windStrength = WI.str;
+    saveSettingsState();
+  };
   if (wdr) wdr.oninput = () => { WI.dir = wdr.value * D2; if (wdv) wdv.textContent = wdr.value + '°'; };
   if (hlm) hlm.oninput = () => { HM.t = hlm.value / 100; };
   [['w0', 0], ['w1', Math.PI / 2], ['w2', Math.PI * .62]].forEach(([id, o]) => {
@@ -444,18 +530,6 @@ export function setupUI(actions = {}) {
   });
 
   // Ajustes de mapa procedural
-  let mapAuto = true, mapVDm = 2, mapFa = 0, mapFn = 0, mapCool = 0;
-  const mapVB = [...document.querySelectorAll('[data-vd]')];
-  function setMapVD(v, isManual = false) {
-    if (isManual) mapVDm = v;
-    ILHAS.setVD(v);
-    if ($('mapa-rg')) $('mapa-rg').value = v;
-    if ($('mapa-rgv')) $('mapa-rgv').textContent = Math.round((v - .35) * ILHAS.CS) + ' m';
-    if ($('modal-mapa-rg')) $('modal-mapa-rg').value = v;
-    if ($('modal-mapa-rg-val')) $('modal-mapa-rg-val').textContent = Math.round((v - .35) * ILHAS.CS) + ' m';
-    mapVB.forEach(x => x.classList.toggle('on', +x.dataset.vd === v));
-    modalVdBtns.forEach(x => x.classList.toggle('on', +x.dataset.modalVd === v));
-  }
   function mapTick(dt) {
     mapFa += dt;
     mapFn++;
@@ -501,18 +575,6 @@ export function setupUI(actions = {}) {
     ILHAS.reseed();
     mapRelocate();
   };
-  [['gh', 'height', 1, ''], ['gd', 'depth', 1, ''], ['gs', 'spacing', 1, ''], ['gn', 'density', .01, '%']].forEach(([id, k, sc2, u]) => {
-    const el = $('mapa-' + id), lb = $('mapa-' + id + 'v');
-    if (!el || !lb) return;
-    const show = () => lb.textContent = (k == 'density' ? Math.round(el.value) : el.value) + (u || '');
-    el.value = k == 'density' ? ILHAS.GEN[k] * 100 : ILHAS.GEN[k];
-    show();
-    el.oninput = show;
-    el.onchange = () => {
-      ILHAS.setCfg(k, k == 'density' ? el.value / 100 : +el.value);
-      mapRelocate();
-    };
-  });
   setMapVD(2);
 
   setupRadialMenu({ setAll });
@@ -531,6 +593,18 @@ export function setupUI(actions = {}) {
   };
 }
 
+export function formatGameTime() {
+  const h = Math.floor(S.time);
+  const m = Math.floor((S.time - h) * 60);
+  const hh = String(h).padStart(2, '0');
+  const mm = String(m).padStart(2, '0');
+  let icon = '☀️';
+  if (h >= 5 && h < 7) icon = '🌅';
+  else if (h >= 17 && h < 19) icon = '🌇';
+  else if (h >= 19 || h < 5) icon = '🌙';
+  return `${hh}:${mm} ${icon}`;
+}
+
 export function updWindHud(wang) {
   const whA = document.getElementById('wha'), whT = document.getElementById('wht'), whC = document.getElementById('whc');
   if (!whA || !whT) return;
@@ -539,7 +613,7 @@ export function updWindHud(wang) {
   if (whC) {
     whC.setAttribute('transform', 'translate(50 50) rotate(' + (-ST.hd / D2).toFixed(1) + ')');
   }
-  whT.innerHTML = 'Vento ' + Math.round(WI.wsp * 1.944) + ' nós<br>' + potName(Math.abs(rel) / D2) + '<br>Vel. ' + (ST.v * 1.944).toFixed(1) + ' nós<br>Rumo ' + degN(ST.hd) + '°<br>Pos ' + Math.round(ST.px) + ', ' + Math.round(ST.pz) + '<br>Banda ' + Math.round(Math.abs(ST.heel) / D2) + '°' + (Math.abs(ST.heel) > .58 ? ' ⚠ borda na água' : Math.abs(ST.heel) > .25 ? ' ⚠' : '') + '<br>GZ ' + Math.round(100 * Math.max(0, Math.sin(Math.abs(ST.heel)) * (1 - Math.pow(ST.heel / 1.1, 2))) / .4) + '% do máx' + (ST.fl ? '<br>velas batendo' : '') + (AN.set ? '<br>⚓ fundeada' : AN.d > .5 ? '<br>⚓ lançada' : '');
+  whT.innerHTML = 'Horário: ' + formatGameTime() + '<br>Vento ' + Math.round(WI.wsp * 1.944) + ' nós<br>' + potName(Math.abs(rel) / D2) + '<br>Vel. ' + (ST.v * 1.944).toFixed(1) + ' nós<br>Rumo ' + degN(ST.hd) + '°<br>Pos ' + Math.round(ST.px) + ', ' + Math.round(ST.pz) + '<br>Banda ' + Math.round(Math.abs(ST.heel) / D2) + '°' + (Math.abs(ST.heel) > .58 ? ' ⚠ borda na água' : Math.abs(ST.heel) > .25 ? ' ⚠' : '') + (ST.fl ? '<br>velas batendo' : '') + (AN.set ? '<br>⚓ fundeada' : AN.d > .5 ? '<br>⚓ lançada' : '');
 }
 
 export function updAnchor(dt) {

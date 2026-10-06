@@ -31,6 +31,7 @@ export const sea = new T.Mesh(og, new T.MeshStandardMaterial({
   opacity: .92,
   depthWrite: true
 }));
+sea.receiveShadow = true;
 sea.frustumCulled = false;
 sc.add(sea);
 

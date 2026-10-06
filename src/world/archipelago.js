@@ -216,5 +216,5 @@ function regen() { cells.clear(); chunks.forEach(drop); chunks.clear(); queue.le
 function setCfg(k, v) { GEN[k] = v; calc(); regen() }
 function reseed() { WS = (Math.random() * 1e9 | 0) || 1; regen() }
 function setVD(v) { VD = v; plan.f = 1; bud = 50; }
-return { hit, startPos, safeNear, update, prime, setCfg, reseed, setVD, vd: () => VD, CS, tH, SEA, GEN, chunks, queue, nearestIsland }
+return { hit, startPos, safeNear, update, prime, setCfg, reseed, setVD, vd: () => VD, CS, tH, SEA, GEN, chunks, queue, nearestIsland, setWireframe: on => { MAT.wireframe = on; } }
 })(ilhasRoot);

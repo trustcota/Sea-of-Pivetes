@@ -55,6 +55,9 @@ export function updShipPhysics(dt, sw, gu, wang, vwx, vwz) {
     x.d += (x.t - x.d) * (1 - Math.exp(-dt * 2.4));
     if (Math.abs(x.t - x.d) < .002) x.d = x.t;
   }
+  for (const l of SH.ladders) {
+    l.upd(dt, SEAS.wt, ST.heel, ST.pt, ST.svx, ST.svz, vwx, vwz);
+  }
 
   // Ondas sob o casco (referencial girado pelo rumo)
   const ch = Math.cos(ST.hd), sh = Math.sin(ST.hd);
