@@ -130,7 +130,12 @@ export function hudMode(msg, gbTxt) {
   gq.classList.remove('on');
   gg.classList.remove('on');
   gj.textContent = PL.m === 'climb' ? 'Soltar' : 'Pular';
-  gj.classList.toggle('on', PL.m !== 'swim');
+
+  // Mostrar botão de pular no navio OU em terra firme (ilha/solo). Ocultar quando nadando no mar aberto.
+  const terH = ILHAS && ILHAS.tH ? ILHAS.tH(PL.wx, PL.wz) : -99;
+  const onLand = terH >= -0.4;
+  const canJump = PL.m === 'ship' || (PL.m === 'swim' && onLand);
+  gj.classList.toggle('on', canJump);
 
   const showDecInc = CAM.fpv && PL.m === 'climb';
   if (gdec && ginc) {
