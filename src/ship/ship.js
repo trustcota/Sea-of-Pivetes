@@ -82,13 +82,34 @@ export const SH = (() => {
   for (const x of [-.95, 0, .95]) box(.5, .5, .1, glow, x, 1.6, -6.02);
   box(2.6, .12, .14, gold, 0, 2.2, -6.04); box(2.2, .12, .14, gold, 0, 1.1, -6.04);
   box(.14, 1.7, .55, dark, 0, -.35, -6.3);
-  for (const s of [1, -1]) { cyl(.04, .05, 1.4, 5, dark, s * 1.2, 1.9, -5.7); box(.26, .34, .26, glow, s * 1.2, 2.75, -5.7) }
-  const lanternLights = [1, -1].map(s => {
+  const lanternLights = [];
+  const addLantern = (lx, ly, lz, s) => {
+    // Suporte arqueado de ferro
+    cyl(.03, .03, .6, 4, iron, lx - s * 0.08, ly - 0.4, lz, ship).rotation.z = -s * Math.PI / 8;
+    // Base metálica dourada da lanterna
+    cyl(.14, .08, .06, 6, gold, lx, ly - .16, lz, ship);
+    cyl(.12, .12, .02, 6, iron, lx, ly - .12, lz, ship);
+    // Vidro brilhante hexagonal
+    box(.16, .24, .16, glow, lx, ly, lz, ship);
+    // Molduras horizontais de metal (topo e base do vidro)
+    cyl(.12, .12, .02, 6, iron, lx, ly + .12, lz, ship);
+    // Teto cônico dourado com esfera decorativa
+    cyl(0, .14, .12, 6, gold, lx, ly + .18, lz, ship);
+    add(new T.SphereGeometry(.04, 4, 4), gold, lx, ly + .25, lz, ship);
+
+    // Ponto de luz quente dinâmico
     const l = new T.PointLight(0xffaa44, 1.2, 14);
-    l.position.set(s * 1.2, 2.75, -5.7);
+    l.position.set(lx, ly, lz);
     ship.add(l);
-    return l;
-  });
+    lanternLights.push(l);
+  };
+
+  for (const s of [1, -1]) {
+    // Lanternas de Popa (traseiras, elevadas nas quinas de popa)
+    addLantern(s * 1.42, 3.35, -5.9, s);
+    // Lanternas Laterais (atrás das escadas de corda)
+    addLantern(s * 1.82, 2.05, 1.2, s);
+  }
   const wh = new T.Group(), whm = []; wh.position.set(0, 2.15, -4.6); ship.add(wh);
   box(.36, 1, .36, wood, 0, 1.7, -4.6);
   whm.push(own(add(new T.TorusGeometry(.5, .06, 4, 12), wood, 0, 0, 0, wh)));
@@ -130,16 +151,51 @@ export const SH = (() => {
     box(.22, .22, .4, dark, 0, y, .14, P2);
     const bun = add(new T.CylinderGeometry(1, 1, 1, 10), sailM, 0, y, .46, P2); bun.rotation.z = Math.PI / 2;
     const mt = Math.min(top, y + 1.5), bk = V(0, Math.min(top - .05, y + 1.1), z), cx = [-.45, 0, .45][ix];
-    box(.14, .14, .14, iron, 0, bk.y, z + .26); box(.18, .1, .12, iron, cx, yb + .12, z - .6); const hs = own(dr(.02, gR)); setR(hs, V(0, bk.y, z + .05), V(cx, yb + .12, z - .6));
+    box(.14, .14, .14, iron, 0, bk.y, z + .26);
+    
+    // Mesa de Malaguetas (Suporte elevado de sustentação das cordas)
+    if (ix === 0) {
+      box(1.15, 0.06, 0.22, dark, 0, 1.25, z - .28);
+    }
+    // Pino metálico (malagueta) fixado na mesa para prender as cordas de içamento
+    box(.05, .18, .05, iron, cx, 1.34, z - .30);
+    
+    // Prancha de madeira escura (suporte longo) transversal completa, idêntica à mesa de malaguetas
+    box(1.15, 0.06, 0.22, dark, 0, bk.y - 0.4, z - .28);
+    // Suporte metálico (ferrolho) fixado no suporte de madeira
+    box(.04, .04, .06, iron, cx, bk.y - 0.4, z - .26);
+    // Argola dourada de passagem de cabo na ponta do suporte
+    add(new T.TorusGeometry(.04, .012, 4, 8), gold, cx, bk.y - 0.4, z - .30).rotation.x = Math.PI / 2;
+    
+    // Segmento superior da corda de içamento (da polia até a argola de guia)
+    const hs = own(dr(.02, gR));
+    setR(hs, V(0, bk.y, z + .05), V(cx, bk.y - 0.4, z - .30));
+    
+    // Segmento inferior da corda de içamento (da argola de guia descendo reta até a malagueta)
+    const hsBot = own(dr(.02, gR));
+    setR(hsBot, V(cx, bk.y - 0.4, z - .30), V(cx, 1.34, z - .30));
+    
     const LF = [dr(.022), dr(.022)], BR = [own(dr(.026, rR)), own(dr(.026, rR))], CL = [own(dr(.022, gR)), own(dr(.022, gR))], SS = [dr(.03), dr(.03)], BU = own(dr(.022, gR)), HY = own(dr(.02, gR));
     const so = {
       name, d: 1, t: 1, upd(tt, wd, fs) {
-        const d = this.d, a = rg.a, c = Math.cos(a), s2 = Math.sin(a), W2 = (x, y, zl) => V(x * c + zl * s2, y, -x * s2 + zl * c + z);
+        const d = this.d, a = -rg.a, c = Math.cos(a), s2 = Math.sin(a), W2 = (x, y, zl) => V(x * c + zl * s2, y, -x * s2 + zl * c + z);
         const hh = Math.max(.001, h * d), bl = (wd < 0 ? -1 : 1) * (.12 + .88 * Math.abs(wd)) * .1 * w * Math.pow(d, .6), fa = (.02 + .1 * fs) * Math.min(1, d * 1.5), ph = z * 1.7 + y, on = d > .015;
         m.visible = on; [BU, ...CL, ...SS].forEach(o => o.visible = on);
         for (let i = 0; i < n; i++) {
           const u = uv.getX(i), t = 1 - uv.getY(i);
-          p.setXYZ(i, (u - .5) * w * (.8 + .2 * t), y - t * hh, bl * Math.sin(Math.PI * u) * Math.pow(Math.sin(Math.PI * (.08 + .84 * t)), .7) * Math.min(1, .3 + 2.4 * t) + fa * t * Math.sin(u * 9 + t * 6 - tt * 3.4 + ph))
+          const vx = (u - .5) * w * (.8 + .2 * t);
+          let vz = bl * Math.sin(Math.PI * u) * Math.pow(Math.sin(Math.PI * (.08 + .84 * t)), .7) * Math.min(1, .3 + 2.4 * t) + fa * t * Math.sin(u * 9 + t * 6 - tt * 3.4 + ph);
+          
+          // Colisão realista com o cilindro do mastro
+          const rCol = 0.22 * (1 - 0.3 * t);
+          const zRel = vz + 0.3;
+          if (Math.abs(vx) < rCol) {
+            const zLimit = Math.sqrt(rCol * rCol - vx * vx);
+            if (zRel < zLimit) {
+              vz = zLimit - 0.3;
+            }
+          }
+          p.setXYZ(i, vx, y - t * hh, vz);
         }
         p.needsUpdate = true;
         const rr = .09 + .11 * (1 - d) * h / 1.5; bun.visible = d < .985; bun.scale.set(rr, w * .88, rr); bun.position.y = y - rr * .7;
@@ -151,7 +207,7 @@ export const SH = (() => {
         });
         setR(BU, W2(p.getX(ib), p.getY(ib), p.getZ(ib) + .3), yc); setR(HY, yc, bk)
       }
-    }; so.rg = rg; so.rop = BR; so.hr = hs; so.sq = 1; so.ar = w * h * .9; so.ps = 0; so.pt = 0; so.fl = .1; so.gl = [G(m, 's'), G(hs, 'h'), G(BU, 'h'), G(HY, 'h'), ...CL.map(o => G(o, 'h')), ...BR.map(o => G(o, 'r'))]; sails.push(so); inter.push({ t: 'hoist', sail: so, pos: V(cx, yb + .12, z - .6), label: 'Talha · ' + name })
+    }; so.rg = rg; so.rop = BR; so.hr = hs; so.sq = 1; so.ar = w * h * .9; so.ps = 0; so.pt = 0; so.fl = .1; so.gl = [G(m, 's'), G(hs, 'h'), G(hsBot, 'h'), G(BU, 'h'), G(HY, 'h'), ...CL.map(o => G(o, 'h')), ...BR.map(o => G(o, 'r'))]; sails.push(so); inter.push({ t: 'hoist', sail: so, pos: V(cx, 1.34, z - .30), label: 'Talha · ' + name })
   };
   const tr = (name, rg, tk, hd, cw, ph, o) => {
     if (!rg.ri) { rg.ri = 1; [1, -1].forEach(k => inter.push({ t: 'rot', rg, k, pos: rail(k, o.az), label: 'Escota · ' + rg.name })) }
@@ -183,6 +239,7 @@ export const SH = (() => {
 
   /* Cordame: enxárcias, escadas de cordas e estais */
   masts.forEach(([z, h, r, y0]) => {
+    if (z === 0.2) return; // Pula o mastro central para remover suas enxárcias
     for (const s of [1, -1]) {
       const top = [0, y0 + h * .66, z], P = [-.9, -.4, .1].map(d => { const q = z + d, y = L(S, q); return [s * edge(q, y), y, q] });
       P.forEach(p => { rope(top, p); add(new T.TorusGeometry(.1, .035, 4, 8), iron, p[0], p[1] + .05, p[2]).rotation.x = Math.PI / 2 });
@@ -190,7 +247,8 @@ export const SH = (() => {
     }
   });
   const T2 = [0, 10.35, .2], T3 = [0, 7.6, -3.3];
-  rope(T2, [0, 3.1, 9.3], .035); rope(T3, [0, 2.56, -5.98], .035, rp, 5, .1); rope(T2, T3, .035, rp, 5, .16);
+  // Estais estáticos do mastro central removidos para limpar a visualização
+  rope(T3, [0, 2.56, -5.98], .035, rp, 5, .1);
 
   /* Bandeira Jolly Roger */
   const jolly = () => {

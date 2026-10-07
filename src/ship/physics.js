@@ -49,7 +49,7 @@ export function updShipPhysics(dt, sw, gu, wang, vwx, vwz) {
   // Rotação suave das vergas e abertura das velas
   for (const g of SH.rigs) {
     g.a += (g.t - g.a) * (1 - Math.exp(-dt * 2.2));
-    if (g.piv) g.piv.rotation.y = g.a;
+    if (g.piv) g.piv.rotation.y = -g.a;
   }
   
   // Log de depuração (limitado para evitar inundar o console)
@@ -229,7 +229,7 @@ export function updShipPhysics(dt, sw, gu, wang, vwx, vwz) {
   }
 
   // Banda e momento restaurador
-  const Hm = Mh / AT * .0012 * spl - .16 * ST.v * ST.r, ph = ST.heel;
+  const Hm = Mh / AT * .00015 * spl - .16 * ST.v * ST.r, ph = ST.heel;
   const R = Math.abs(ph) <= .58 ? Math.sin(ph) * (1 - Math.pow(ph / 1.1, 2)) : Math.sign(ph) * .396 * Math.max(.25, 1 - (Math.abs(ph) - .58) * 1.1);
   ST.hr += ((-Hm - R) - (.55 + 16 * Math.abs(Hm) / Math.max(2, Math.hypot(ax, az))) * ST.hr) / 2.2 * dt;
   ST.heel = clamp(ph + ST.hr * dt, -1.2, 1.2);

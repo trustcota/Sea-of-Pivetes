@@ -615,7 +615,7 @@ export function setupUI(actions = {}) {
     ILHAS.reseed();
     mapRelocate();
   };
-  setMapVD(2);
+  setMapVD(SETTINGS.renderDist !== undefined ? SETTINGS.renderDist : 2);
 
   setupRadialMenu({ setAll });
 

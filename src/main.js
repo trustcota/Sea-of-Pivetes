@@ -310,8 +310,8 @@ function loop(now) {
 
   // Balanço dinâmico do casco
   [vy, vyv] = so2(vy, vyv, (hb + hs + hp + ht + hw0) / 5 + .4, 1.6, .6, dt);
-  [pt, ptv] = so2(pt, ptv, -Math.atan((hb - hs) / 10) * .8, 1.4, .5, dt);
-  [rl, rlv] = so2(rl, rlv, Math.atan((ht - hp) / 4.4) * .55, 1.26, .4, dt);
+  [pt, ptv] = so2(pt, ptv, -Math.atan((hb - hs) / 10) * .45, 1.4, .5, dt);
+  [rl, rlv] = so2(rl, rlv, Math.atan((ht - hp) / 4.4) * .28, 1.26, .4, dt);
   ship.position.y = vy;
   ship.rotation.set(pt, ST.hd, rl + ST.heel);
   ST.vy = vy;
