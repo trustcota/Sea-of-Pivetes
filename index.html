@@ -85,11 +85,20 @@
 
 <!-- HUD do Sistema de Pesca Low Poly -->
 <div id="fishing-hud" class="fishing-hud in-game-hud" style="display: none;">
-  <div id="fishing-arw"></div>
-  <div id="fishing-hint"></div>
-  <div class="fishing-bar" id="fishing-pwb"><i id="fishing-pwf"></i></div>
-  <div class="fishing-bar" id="fishing-sbb"><i id="fishing-sbf"></i></div>
-  <div class="fishing-bar" id="fishing-tnb"><i id="fishing-tnf"></i></div>
+  <!-- Barra de Direção do Peixe (Centralizada, bi-direcional) -->
+  <div class="fishing-bar" id="fishing-pwb">
+    <div class="fishing-bar-center-line"></div>
+    <i id="fishing-pwf"></i>
+  </div>
+  <!-- Barra de Tensão da Linha -->
+  <div class="fishing-bar" id="fishing-tnb">
+    <i id="fishing-tnf"></i>
+  </div>
+  <!-- Botão de Ação Lateral Central-Direita (Lançar / Recolher) -->
+  <button id="fishing-btn-action" class="fishing-action-btn" type="button" aria-label="Ação de Pesca">
+    <span class="fishing-action-btn-icon" id="fishing-btn-icon">🎣</span>
+    <span class="fishing-action-btn-label" id="fishing-btn-label">LANÇAR</span>
+  </button>
 </div>
 
 <!-- Banner Toast de Notificação de Ordem do Capitão -->

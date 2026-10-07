@@ -141,6 +141,9 @@ const hideJoystick = () => {
 };
 
 cv.onpointerdown = e => {
+  if (e.target && (e.target.closest('#fishing-btn-action') || e.target.closest('.fishing-action-btn'))) {
+    return;
+  }
   if (GAME.state === 'MENU') {
     CAM.drag = true;
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
@@ -151,8 +154,8 @@ cv.onpointerdown = e => {
   }
   const isTouch = e.pointerType !== 'mouse' || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
   if (CAM.fpv && !isTouch && e.button === 0) {
-    if (!document.pointerLockElement) {
-      try { cv.requestPointerLock(); } catch (err) { console.warn('Pointer lock failed', err); }
+    if (document.pointerLockElement !== cv) {
+      try { cv.requestPointerLock(); } catch (_) {}
     }
   }
   if (CAM.fpv && isTouch) {
