@@ -1334,6 +1334,19 @@ body.touch-device #ginc.on {
   filter: drop-shadow(0 0 16px rgba(197, 146, 31, 0.95));
 }
 
+.gta-slice-path.disabled {
+  fill: rgba(20, 15, 12, 0.6);
+  stroke: rgba(100, 80, 60, 0.3);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.gta-slice-path.disabled:hover, .gta-slice-path.disabled.active {
+  fill: rgba(35, 25, 20, 0.7);
+  stroke: rgba(140, 100, 70, 0.4);
+  filter: none;
+}
+
 .gta-slice-text-label {
   font-family: 'Cinzel', serif;
   font-weight: 800;

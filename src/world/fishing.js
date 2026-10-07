@@ -639,6 +639,7 @@ export class FishingSystem {
   }
 
   equipRod(k) {
+    if (!CAM.fpv) return;
     if (k === this.currentRodIdx && this.equipped) {
       this.unequip();
       return;
@@ -681,6 +682,10 @@ export class FishingSystem {
   }
 
   toggleFishing() {
+    if (!CAM.fpv) {
+      if (this.equipped) this.unequip();
+      return;
+    }
     if (this.equipped) {
       this.unequip();
     } else {

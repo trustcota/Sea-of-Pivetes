@@ -7,7 +7,7 @@ import { ILHAS } from './world/archipelago.js';
 import { updExtras, updSpeedFx, vn, updSun, updAtmosphere } from './world/weather.js';
 import { ship, fl } from './ship/ship.js';
 import { updShipPhysics } from './ship/physics.js';
-import { setFpv, resetPlayer, updFPV, updGlow, updGlowHelm, qD } from './ship/player.js';
+import { setFpv, resetPlayer, updFPV, updGlow, updGlowHelm, qD, updInter, hud } from './ship/player.js';
 import { setupUI, updWindHud, updAnchor, updateFpsVisibility } from './ui.js';
 import { isRadialMenuOpen, updateRadialSelectionByDirection, executeSelectedRadialAction } from './radialMenu.js';
 import { fishManager } from './world/fish.js';
@@ -371,6 +371,10 @@ function loop(now) {
   } else if (CAM.fpv) {
     updFPV(dt, rows, SL, rrows, hlm);
   } else {
+    if (INT.grab && INT.grab.t === 'helm') {
+      updInter(dt, rows, SL, rrows, hlm);
+      hud();
+    }
     if (!CAM.drag && CAM.auto) CAM.yaw += dt * .04;
     const cx = Math.sin(CAM.yaw) * Math.cos(CAM.pit) * CAM.dist;
     const cz = Math.cos(CAM.yaw) * Math.cos(CAM.pit) * CAM.dist;

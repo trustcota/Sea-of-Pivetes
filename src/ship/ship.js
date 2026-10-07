@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { D2 } from '../core/math.js';
-import { HM } from '../core/state.js';
+import { HM, AN } from '../core/state.js';
 import { sc } from '../core/renderer.js';
 
 const T = THREE;
 
 // Navio pirata
 export const SH = (() => {
-  const mats = [], ship = new T.Group();
+  const mats = [], ship = new T.Group(), inter = [];
   const M = (c, o = {}) => {
     const m = new T.MeshStandardMaterial(Object.assign({ color: c, flatShading: true, roughness: .9, metalness: 0, side: T.DoubleSide }, o));
     mats.push(m);
@@ -82,15 +82,20 @@ export const SH = (() => {
   for (const x of [-.95, 0, .95]) box(.5, .5, .1, glow, x, 1.6, -6.02);
   box(2.6, .12, .14, gold, 0, 2.2, -6.04); box(2.2, .12, .14, gold, 0, 1.1, -6.04);
   box(.14, 1.7, .55, dark, 0, -.35, -6.3);
-  const lanternLights = [];
-  const addLantern = (lx, ly, lz, s) => {
-    // Suporte arqueado de ferro
-    cyl(.03, .03, .6, 4, iron, lx - s * 0.08, ly - 0.4, lz, ship).rotation.z = -s * Math.PI / 8;
-    // Base metálica dourada da lanterna
-    cyl(.14, .08, .06, 6, gold, lx, ly - .16, lz, ship);
-    cyl(.12, .12, .02, 6, iron, lx, ly - .12, lz, ship);
-    // Vidro brilhante hexagonal
-    box(.16, .24, .16, glow, lx, ly, lz, ship);
+  const lanterns = [];
+  const addLantern = (lx, ly, lz, s, nameSuffix) => {
+    const idx = lanterns.length;
+    // Plaqueta de ferro de assentamento na borda
+    box(.16, .02, .16, iron, lx, ly - .17, lz, ship);
+    // Base metálica dourada da lanterna assentada sobre a placa
+    cyl(.14, .08, .06, 6, gold, lx, ly - .14, lz, ship);
+    cyl(.12, .12, .02, 6, iron, lx, ly - .10, lz, ship);
+    
+    // Vidro brilhante hexagonal (com material exclusivo clonado para poder apagar individualmente)
+    const lanternGlow = glow.clone();
+    mats.push(lanternGlow);
+    box(.16, .24, .16, lanternGlow, lx, ly, lz, ship);
+    
     // Molduras horizontais de metal (topo e base do vidro)
     cyl(.12, .12, .02, 6, iron, lx, ly + .12, lz, ship);
     // Teto cônico dourado com esfera decorativa
@@ -101,14 +106,31 @@ export const SH = (() => {
     const l = new T.PointLight(0xffaa44, 1.2, 14);
     l.position.set(lx, ly, lz);
     ship.add(l);
-    lanternLights.push(l);
+
+    // Registra a lanterna na nossa lista estruturada
+    lanterns.push({
+      light: l,
+      mat: lanternGlow,
+      on: true,
+      index: idx,
+      pos: new T.Vector3(lx, ly, lz)
+    });
+
+    // Registra o ponto de interação em Primeira Pessoa (E)
+    inter.push({
+      t: 'lantern',
+      index: idx,
+      pos: new T.Vector3(lx, ly, lz),
+      label: 'Lanterna ' + nameSuffix
+    });
   };
 
   for (const s of [1, -1]) {
-    // Lanternas de Popa (traseiras, elevadas nas quinas de popa)
-    addLantern(s * 1.42, 3.35, -5.9, s);
-    // Lanternas Laterais (atrás das escadas de corda)
-    addLantern(s * 1.82, 2.05, 1.2, s);
+    const sideName = s > 0 ? 'Estibordo' : 'Bombordo';
+    // Lanternas de Popa (traseiras, assentadas diretamente sobre as quinas traseiras em Y = 2.5)
+    addLantern(s * 1.42, 2.66, -5.9, s, 'Popa (' + sideName + ')');
+    // Lanternas Laterais (atrás das escadas, assentadas diretamente sobre a amurada lateral em Y = 0.95)
+    addLantern(s * 1.82, 1.11, 1.2, s, 'Lateral (' + sideName + ')');
   }
   const wh = new T.Group(), whm = []; wh.position.set(0, 2.15, -4.6); ship.add(wh);
   box(.36, 1, .36, wood, 0, 1.7, -4.6);
@@ -126,7 +148,7 @@ export const SH = (() => {
   });
 
   /* Sistema de velas: içar (d), rotacionar (ângulo limitado por mastro), cordas dinâmicas */
-  const sails = [], rigs = [], inter = [], NX = 18, NY = 12, V = (x, y, z) => new T.Vector3(x, y, z);
+  const sails = [], rigs = [], NX = 18, NY = 12, V = (x, y, z) => new T.Vector3(x, y, z);
   const gR = M('#d9b24a', { roughness: .7 }), rR = M('#b3392f', { roughness: .7 });
   const grid = (nx, ny) => {
     const g = new T.PlaneGeometry(1, 1, nx, ny), uv = g.attributes.uv, n = uv.count, c = new Float32Array(n * 3);
@@ -178,7 +200,7 @@ export const SH = (() => {
     const LF = [dr(.022), dr(.022)], BR = [own(dr(.026, rR)), own(dr(.026, rR))], CL = [own(dr(.022, gR)), own(dr(.022, gR))], SS = [dr(.03), dr(.03)], BU = own(dr(.022, gR)), HY = own(dr(.02, gR));
     const so = {
       name, d: 1, t: 1, upd(tt, wd, fs) {
-        const d = this.d, a = -rg.a, c = Math.cos(a), s2 = Math.sin(a), W2 = (x, y, zl) => V(x * c + zl * s2, y, -x * s2 + zl * c + z);
+        const d = this.d, a = rg.a, c = Math.cos(a), s2 = Math.sin(a), W2 = (x, y, zl) => V(x * c + zl * s2, y, -x * s2 + zl * c + z);
         const hh = Math.max(.001, h * d), bl = (wd < 0 ? -1 : 1) * (.12 + .88 * Math.abs(wd)) * .1 * w * Math.pow(d, .6), fa = (.02 + .1 * fs) * Math.min(1, d * 1.5), ph = z * 1.7 + y, on = d > .015;
         m.visible = on; [BU, ...CL, ...SS].forEach(o => o.visible = on);
         for (let i = 0; i < n; i++) {
@@ -229,7 +251,7 @@ export const SH = (() => {
       }
     }; so.rg = rg; so.rop = SS; so.hr = hs; so.sq = 0; so.ar = .5 * V().crossVectors(hF.clone().sub(a), cF.clone().sub(a)).length(); so.ps = 0; so.pt = 0; so.fl = .1; so.gl = [G(m, 's'), G(hs, 'h'), G(HY, 'h'), ...SS.map(o => G(o, 'r'))]; sails.push(so); inter.push({ t: 'hoist', sail: so, pos: V(...o.ck), label: 'Talha · ' + name })
   };
-  const rM = rig('Principal', .2, 32, 1), rZ = rig('Mezena', -3.3, 45, 0), rJ = rig('Bujarrona', 0, 40, 0);
+  const rM = rig('Principal', .2, 60, 1), rZ = rig('Mezena', -3.3, 75, 0), rJ = rig('Bujarrona', 0, 65, 0);
   tr('Bujarrona', rJ, [0, 3.1, 9], [0, 7.5, 3.75], [0, 3.2, 5.9], 0, { bk: [0, 7.68, 3.55], ck: [.45, .47, 2.8], az: 4.7 });
   sq('Grande', rM, 5.1, 6.2, 2.9, 10.3, .35, 0); sq('Gávea', rM, 7.9, 4.8, 2.3, 10.3, .35, 1); sq('Joanete', rM, 9.6, 3.2, 1.2, 10.3, .35, 2);
   tr('Mezena', rZ, [0, 3.4, -3.45], [0, 7.2, -3.45], [0, 3.4, -5.2], 1.3, { bk: [0, 7.6, -3.3], ck: [.42, 1.32, -3.75], az: -5, boom: 1 });
@@ -281,6 +303,7 @@ export const SH = (() => {
       side: s, xRail, topY: LD.top, botY: LD.bot, nR, zOffsets, ropeSegs, rungs, LZ,
       swingX: 0, swingZ: 0, velX: 0, velZ: 0,
       waveX: 0, waveZ: 0,
+      unroll: AN.d || 0,
       getPt(t, zz) {
         const y = this.topY - t * (this.topY - this.botY);
         const inf = t * t;
@@ -289,6 +312,9 @@ export const SH = (() => {
         return V(x, y, z);
       },
       upd(dt, tt, roll, pitch, svx, svz, wx, wz) {
+        const targetUnroll = Math.max(0, Math.min(1, AN.d));
+        this.unroll += (targetUnroll - this.unroll) * Math.min(1, dt * 5);
+
         const targetX = this.side * (.2 + Math.abs(roll) * .7) + wx * .12 - svx * .06;
         const targetZ = wz * .12 - svz * .06;
         this.velX += ((targetX - this.swingX) * 10 - this.velX * 2.5) * dt;
@@ -299,21 +325,52 @@ export const SH = (() => {
         this.waveX = Math.sin(tt * 3.5 + this.side * 2) * (.05 + Math.abs(roll) * .1);
         this.waveZ = Math.cos(tt * 2.8) * (.05 + Math.abs(pitch) * .1);
 
+        const uVal = this.unroll;
+
         this.ropeSegs.forEach(({ zz, segs }) => {
           for (let k = 0; k < this.nR; k++) {
-            const p1 = this.getPt(k / this.nR, zz);
-            const p2 = this.getPt((k + 1) / this.nR, zz);
-            setR(segs[k], p1, p2);
+            const t1 = k / this.nR;
+            const t2 = (k + 1) / this.nR;
+            if (t2 <= uVal) {
+              const p1 = this.getPt(t1, zz);
+              const p2 = this.getPt(t2, zz);
+              setR(segs[k], p1, p2);
+              segs[k].visible = true;
+            } else if (t1 < uVal) {
+              const p1 = this.getPt(t1, zz);
+              const p2 = this.getPt(uVal, zz);
+              setR(segs[k], p1, p2);
+              segs[k].visible = true;
+            } else {
+              segs[k].visible = false;
+            }
           }
         });
 
         for (let k = 0; k <= this.nR; k++) {
           const t = k / this.nR;
-          const p1 = this.getPt(t, this.zOffsets[0]);
-          const p2 = this.getPt(t, this.zOffsets[1]);
           const rung = this.rungs[k];
-          rung.position.copy(p1).add(p2).multiplyScalar(.5);
-          rung.rotation.y = this.side * (this.swingX * .2);
+          if (t <= uVal) {
+            const p1 = this.getPt(t, this.zOffsets[0]);
+            const p2 = this.getPt(t, this.zOffsets[1]);
+            rung.position.copy(p1).add(p2).multiplyScalar(.5);
+            rung.rotation.y = this.side * (this.swingX * .2);
+            rung.rotation.z = 0;
+            rung.rotation.x = 0;
+            rung.scale.set(1, 1, 1);
+          } else {
+            const rollIndex = k - uVal * this.nR;
+            const rollAngle = rollIndex * 0.85;
+            const rollRad = 0.06 + rollIndex * 0.01;
+            const rx = this.xRail + this.side * (0.04 + Math.cos(rollAngle) * rollRad * 0.5);
+            const ry = this.topY + 0.08 + Math.sin(rollAngle) * rollRad * 0.5;
+            const rz = LZ + (k % 2 === 0 ? 0.03 : -0.03);
+            rung.position.set(rx, ry, rz);
+            rung.rotation.y = 0;
+            rung.rotation.z = rollAngle;
+            rung.rotation.x = 0.1;
+            rung.scale.set(0.8, 0.8, 0.8);
+          }
         }
       }
     };
@@ -340,7 +397,7 @@ export const SH = (() => {
   const arope = cyl(.04, .04, 1, 5, rp, .88, 1, 3.9); arope.frustumCulled = false;
   inter.push({ t: 'anchor', pos: V(0, .35, 2.2), label: 'Âncora (cabrestante)' });
   inter.push({ t: 'helm', pos: V(0, 2.15, -4.6), label: 'Leme' });
-  return { ship, fl, mats, sails, rigs, walk, inter, wh, helm: HM, anc, arope, cap, lad: LD, ladders, whg: whm.map(o => G(o, 'h')), lanternLights }
+  return { ship, fl, mats, sails, rigs, walk, inter, wh, helm: HM, anc, arope, cap, lad: LD, ladders, whg: whm.map(o => G(o, 'h')), lanterns }
 })();
 
 export const ship = SH.ship;

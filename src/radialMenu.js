@@ -60,6 +60,17 @@ const MENUS = {
     title: '📜 ORDENS DO CAPITÃO',
     items: [
       {
+        id: 'anchor',
+        label: 'Âncora',
+        icon: '⚓',
+        desc: 'Baixa ou içar a âncora do galeão',
+        action: () => {
+          AN.t = AN.t > 0.5 ? 0 : 1;
+          showOrderToast('📜 Capitão ordenou: ' + (AN.t > 0.5 ? 'Baixar Âncora!' : 'Subir Âncora!'));
+          closeRadialMenu();
+        }
+      },
+      {
         id: 'sails_up',
         label: 'Içar 100%',
         icon: '⛵',
@@ -93,24 +104,16 @@ const MENUS = {
         }
       },
       {
-        id: 'anchor',
-        label: 'Âncora',
-        icon: '⚓',
-        desc: 'Baixa ou içar a âncora do galeão',
+        id: 'toggle_lanterns',
+        label: 'Furtividade',
+        icon: '💡',
+        desc: 'Liga ou apaga todas as lanternas do navio simultaneamente',
         action: () => {
-          AN.t = AN.t > 0.5 ? 0 : 1;
-          showOrderToast('📜 Capitão ordenou: ' + (AN.t > 0.5 ? 'Baixar Âncora!' : 'Subir Âncora!'));
-          closeRadialMenu();
-        }
-      },
-      {
-        id: 'cam_free',
-        label: 'Olhar Livre',
-        icon: '👁️',
-        desc: 'Alterna o modo olhar livre do capitão',
-        action: () => {
-          INT.tFree = !INT.tFree;
-          showOrderToast('📜 Capitão: Olhar livre ' + (INT.tFree ? 'ativado' : 'desativado'));
+          if (SH && SH.lanterns) {
+            const anyOn = SH.lanterns.some(l => l.on);
+            SH.lanterns.forEach(l => l.on = !anyOn);
+            showOrderToast('📜 Capitão ordenou: Modo Furtivo ' + (anyOn ? 'ATIVADO (luzes apagadas)' : 'DESATIVADO (luzes acesas)'));
+          }
           closeRadialMenu();
         }
       },
@@ -156,7 +159,7 @@ const MENUS = {
       { id: 'anc_menu', label: 'Âncora', icon: '⚓', desc: 'Opções de Âncora', target: 'anchor' },
       { id: 'sail_menu', label: 'Velas', icon: '⛵', desc: 'Abertura das Velas', target: 'sails' },
       { id: 'rig_menu', label: 'Vergas', icon: '🔄', desc: 'Rotação das Vergas', target: 'rigs' },
-      { id: 'cam_menu', label: 'Câmera', icon: '👁️', desc: 'Modos de Visão', target: 'camera' },
+      { id: 'cam_menu', label: 'Visão / Luz', icon: '👁️', desc: 'Opções de Visão e Lanternas', target: 'camera' },
       { id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar à roda principal', target: 'main' }
     ]
   },
@@ -272,7 +275,7 @@ const MENUS = {
   },
   camera: {
     parent: 'submenus',
-    title: '👁️ ORDENS: CÂMERA',
+    title: '👁️ ORDENS: VISÃO & LUZES',
     items: [
       {
         id: 'cam_free',
@@ -296,41 +299,74 @@ const MENUS = {
           closeRadialMenu();
         }
       },
+      {
+        id: 'toggle_lanterns',
+        label: 'Furtividade',
+        icon: '💡',
+        desc: 'Liga ou apaga todas as lanternas do navio simultaneamente',
+        action: () => {
+          if (SH && SH.lanterns) {
+            const anyOn = SH.lanterns.some(l => l.on);
+            SH.lanterns.forEach(l => l.on = !anyOn);
+            showOrderToast('📜 Capitão ordenou: Modo Furtivo ' + (anyOn ? 'ATIVADO (luzes apagadas)' : 'DESATIVADO (luzes acesas)'));
+          }
+          closeRadialMenu();
+        }
+      },
       { id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar ao menu anterior', target: 'submenus' }
     ]
   },
   inventory: {
     title: '🎒 INVENTÁRIO DO EXPLORADOR',
-    items: [
-      {
-        id: 'backpack',
-        label: 'Mochila',
-        icon: '🎒',
-        desc: 'Sua mochila de expedição',
-        target: 'backpack_slots'
-      },
-      {
-        id: 'bestiary',
-        label: 'Bestiário',
-        icon: '📖',
-        desc: 'Registro de criaturas descobertas',
-        action: () => {
-          if (bestiaryModal) bestiaryModal.open();
-          closeRadialMenu();
-        }
-      },
-      {
-        id: 'fishing_rod',
-        label: 'Vara de Pesca',
-        icon: '🎣',
-        desc: 'Equipar ou guardar sua vara de pesca artesanal',
-        action: () => {
-          if (fishingSystem) fishingSystem.toggleFishing();
-          closeRadialMenu();
-        }
-      },
-      { id: 'close', label: 'Fechar', icon: '✕', desc: 'Fechar inventário', action: () => closeRadialMenu() }
-    ]
+    get items() {
+      return [
+        {
+          id: 'backpack',
+          label: 'Mochila',
+          icon: '🎒',
+          desc: 'Sua mochila de expedição',
+          target: 'backpack_slots'
+        },
+        {
+          id: 'bestiary',
+          label: 'Bestiário',
+          icon: '📖',
+          desc: 'Registro de criaturas descobertas',
+          action: () => {
+            if (bestiaryModal) bestiaryModal.open();
+            closeRadialMenu();
+          }
+        },
+        {
+          id: 'fishing_rod',
+          label: CAM.fpv ? 'Vara de Pesca' : 'Vara (Desativada)',
+          icon: '🎣',
+          disabled: !CAM.fpv,
+          desc: CAM.fpv ? 'Equipar ou guardar sua vara de pesca artesanal' : 'Desativada na Câmera Livre (entre em FPV para pescar)',
+          action: () => {
+            if (!CAM.fpv) {
+              showOrderToast('🎣 Vara de pesca desativada na Câmera Livre (mude para FPV com V)');
+              closeRadialMenu();
+              return;
+            }
+            if (fishingSystem) fishingSystem.toggleFishing();
+            closeRadialMenu();
+          }
+        },
+        {
+          id: 'cam_free',
+          label: 'Olhar Livre',
+          icon: '👁️',
+          desc: 'Alterna o modo olhar livre do capitão',
+          action: () => {
+            INT.tFree = !INT.tFree;
+            showOrderToast('📜 Capitão: Olhar livre ' + (INT.tFree ? 'ativado' : 'desativado'));
+            closeRadialMenu();
+          }
+        },
+        { id: 'close', label: 'Fechar', icon: '✕', desc: 'Fechar inventário', action: () => closeRadialMenu() }
+      ];
+    }
   },
   backpack_slots: {
     parent: 'inventory',
@@ -416,12 +452,12 @@ export function closeRadialMenu() {
 export function updateRadialOrdersVisibility() {
   const triggerBtn = document.getElementById('btn-radial-orders');
   const invBtn = document.getElementById('btn-radial-inventory');
-  const show = GAME.state === 'PLAY' && CAM.fpv && GAME.canControl;
+  const show = GAME.state === 'PLAY' && GAME.canControl;
   
   if (triggerBtn) triggerBtn.style.display = show ? 'flex' : 'none';
   if (invBtn) invBtn.style.display = show ? 'flex' : 'none';
 
-  if (!CAM.fpv || GAME.state !== 'PLAY') {
+  if (GAME.state !== 'PLAY') {
     if (isOpen) closeRadialMenu();
   }
 }
@@ -463,7 +499,7 @@ function renderRadialMenu() {
 
     const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     pathEl.setAttribute('d', pathD);
-    pathEl.setAttribute('class', 'gta-slice-path' + (isActive ? ' active' : ''));
+    pathEl.setAttribute('class', 'gta-slice-path' + (item.disabled ? ' disabled' : '') + (isActive ? ' active' : ''));
 
     pathEl.onclick = (e) => {
       e.stopPropagation();
@@ -486,6 +522,7 @@ function renderRadialMenu() {
     iconText.setAttribute('text-anchor', 'middle');
     iconText.setAttribute('dominant-baseline', 'middle');
     iconText.setAttribute('font-size', '18');
+    if (item.disabled) iconText.setAttribute('opacity', '0.4');
     iconText.textContent = item.icon;
 
     const labelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -496,7 +533,7 @@ function renderRadialMenu() {
     labelText.setAttribute('font-size', '9');
     labelText.setAttribute('font-weight', 'bold');
     labelText.setAttribute('class', 'gta-slice-text-label');
-    labelText.setAttribute('fill', isActive ? '#110b06' : '#fff9ed');
+    labelText.setAttribute('fill', item.disabled ? 'rgba(255,255,255,0.4)' : (isActive ? '#110b06' : '#fff9ed'));
     labelText.textContent = item.label;
 
     g.appendChild(iconText);
@@ -709,7 +746,7 @@ export function setupRadialMenu(helpers) {
     if (e.code === 'KeyQ' && e.target.tagName !== 'INPUT') {
       e.preventDefault();
       e.stopPropagation();
-      if (!e.repeat && GAME.state === 'PLAY' && CAM.fpv && GAME.canControl) {
+      if (!e.repeat && GAME.state === 'PLAY' && GAME.canControl) {
         if (!isOpen) {
           openRadialMenu('main');
         }
@@ -720,7 +757,7 @@ export function setupRadialMenu(helpers) {
     if (e.code === 'Tab' && e.target.tagName !== 'INPUT') {
       e.preventDefault();
       e.stopPropagation();
-      if (!e.repeat && GAME.state === 'PLAY' && CAM.fpv && GAME.canControl) {
+      if (!e.repeat && GAME.state === 'PLAY' && GAME.canControl) {
         if (!isOpen) {
           openRadialMenu('inventory');
         }

@@ -24,8 +24,8 @@ export const sea = new T.Mesh(og, new T.MeshStandardMaterial({
   roughness: .08,
   metalness: .12,
   transparent: true,
-  opacity: .92,
-  depthWrite: true
+  opacity: .68,
+  depthWrite: false
 }));
 sea.receiveShadow = true;
 sea.frustumCulled = false;

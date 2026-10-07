@@ -50,7 +50,8 @@ export function qD() {
 }
 
 export function hud() {
-  const on = CAM.fpv && GAME.canControl && GAME.state === 'PLAY';
+  const isSteeringInFreeCam = !CAM.fpv && GAME.canControl && GAME.state === 'PLAY' && INT.grab && INT.grab.t === 'helm';
+  const on = (CAM.fpv || isSteeringInFreeCam) && GAME.canControl && GAME.state === 'PLAY';
   if (!gb) return;
   if (!on) {
     if (gb) gb.classList.remove('on');
@@ -60,6 +61,27 @@ export function hud() {
     if (gg) gg.classList.remove('on');
     if (gdec) gdec.classList.remove('on');
     if (ginc) ginc.classList.remove('on');
+    return;
+  }
+
+  if (isSteeringInFreeCam) {
+    if (gb) gb.classList.remove('on');
+    if (gj) gj.classList.remove('on');
+    if (pr) pr.classList.remove('on');
+    if (gq) gq.classList.remove('on');
+    if (gdec) gdec.classList.remove('on');
+    if (ginc) ginc.classList.remove('on');
+
+    if (gg) {
+      gg.classList.add('on');
+      gl.textContent = 'Leme (Timão)';
+      gg.classList.add('r');
+      gg.classList.toggle('lim', INT.limHit);
+      const t = HM.t;
+      gf.style.left = (t < 0 ? 50 + 50 * t : 50) + '%';
+      gf.style.width = Math.abs(t) * 50 + '%';
+      gv.textContent = Math.round(Math.abs(t) * 100) + '% ' + (t > .02 ? 'Estibordo' : t < -.02 ? 'Bombordo' : 'Reto');
+    }
     return;
   }
   gb.textContent = INT.grab ? 'Soltar' : (INT.near && INT.near.t === 'ladder' ? 'Escada' : 'Pegar');
@@ -167,7 +189,9 @@ export function setFpv(on) {
       try { cv.requestPointerLock(); } catch (_) {}
     }
   } else {
-    INT.grab = null;
+    if (!INT.grab || INT.grab.t !== 'helm') {
+      INT.grab = null;
+    }
     INT.near = null;
     mk.visible = false;
     hud();
@@ -179,6 +203,9 @@ export function setFpv(on) {
     joy.id = lk.id = -1;
     joy.dx = joy.dy = 0;
     INT.tFree = false;
+    if (fishingSystem && fishingSystem.equipped) {
+      fishingSystem.unequip();
+    }
   }
   cam.updateProjectionMatrix();
   if (hint) {
@@ -206,15 +233,25 @@ export function updInter(dt, rows, SL, rrows, hlm) {
     let ld = null;
     const s = fp.x < 0 ? -1 : 1;
     const dotL = -Math.sin(fp.yaw) * s;
-    if (Math.abs(fp.z - 2.1) < .9 && Math.abs(fp.x) > 0.7 && fp.y < .6 && dotL > 0.4) {
+    const ladObj = SH.ladders.find(l => l.side === s);
+    const isLadAvail = ladObj && (ladObj.unroll > 0.3 || AN.d > 0.1);
+    if (isLadAvail && Math.abs(fp.z - 2.1) < .9 && Math.abs(fp.x) > 0.7 && fp.y < .6 && dotL > 0.4) {
       ld = { t: 'ladder', s, pos: new T.Vector3(s * 1.5, 1, 2.1), label: 'Escada de cordas' };
     }
     INT.near = ld || b;
+    if (INT.near && INT.near.t === 'lantern') {
+      const lant = SH.lanterns[INT.near.index];
+      INT.near.label = (lant.on ? 'Apagar ' : 'Acender ') + 'Lanterna';
+    }
   }
 
   const hold = !!(keys.KeyE || INT.tHold);
   if (hold && !INT.ePrev) {
     if (INT.grab) {
+      if (!CAM.fpv && INT.grab.t === 'helm') {
+        INT.ePrev = hold;
+        return;
+      }
       INT.grab = null; INT.pX = INT.pY = 0;
     } else if (INT.near) {
       if (INT.near.t === 'ladder') {
@@ -222,6 +259,12 @@ export function updInter(dt, rows, SL, rrows, hlm) {
         startClimb(ladObj, false);
         INT.ePrev = hold;
         updClimb(dt);
+        return;
+      }
+      if (INT.near.t === 'lantern') {
+        const lant = SH.lanterns[INT.near.index];
+        lant.on = !lant.on;
+        INT.ePrev = hold;
         return;
       }
       INT.grab = INT.near;
@@ -358,6 +401,7 @@ export function goOverboard(wdx, wdz) {
 }
 
 export function startClimb(ladObj, fromWater) {
+  if (ladObj && ladObj.unroll < 0.2 && AN.d < 0.1) return;
   const sh = SH.ship;
   PL.m = 'climb';
   PL.ladder = ladObj;
@@ -390,6 +434,14 @@ export function dropLadder(push) {
 export function updClimb(dt) {
   if (!GAME.canControl || !PL.ladder) return;
   const lad = PL.ladder, s = PL.s;
+  if (lad.unroll < 0.15 && AN.d < 0.1) {
+    if (PL.cy >= lad.topY - 0.4) {
+      PL.m = 'ship'; PL.ladder = null; fp.x = s * 0.85; fp.z = 2.1; fp.y = .35; PL.air = false; PL.vy = 0;
+    } else {
+      dropLadder(0.3);
+      return updSwim(dt);
+    }
+  }
   eEdge();
   const btnVal = (INT.tInc ? 1 : 0) - (INT.tDec ? 1 : 0);
   const up = clamp((keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - joy.dy + btnVal, -1, 1);
@@ -475,7 +527,9 @@ export function updSwim(dt) {
     // Colisão extra para as escadas dinâmicas
     if (Math.abs(lz - 2.1) < .8) {
       for (const lad of SH.ladders) {
+        if (lad.unroll < 0.2 && AN.d < 0.1) continue;
         const t = clamp((lad.topY - ly) / (lad.topY - lad.botY), 0, 1);
+        if (t > lad.unroll + 0.15) continue;
         const pt = lad.getPt(t, lad.LZ);
         if (Math.abs(lz - pt.z) < .4) {
           hwd = Math.max(hwd, Math.abs(pt.x) + .35);
@@ -498,7 +552,9 @@ export function updSwim(dt) {
   sh.worldToLocal(_v);
   if (PL.wet && Math.abs(_v.z - 2.1) < .85 && _v.y > -1.5 && _v.y < 1.5) {
     for (const lad of SH.ladders) {
+      if (lad.unroll < 0.2 && AN.d < 0.1) continue;
       const t = clamp((lad.topY - _v.y) / (lad.topY - lad.botY), 0, 1);
+      if (t > lad.unroll + 0.15) continue;
       const pt = lad.getPt(t, lad.LZ);
       const dx = Math.abs(_v.x) - Math.abs(pt.x);
       const dz = Math.abs(_v.z - pt.z);

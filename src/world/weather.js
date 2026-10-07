@@ -515,11 +515,19 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   
   fLight.intensity = ff * 2.2;
 
-  // Lanternas quentes de popa acendem no crepúsculo/tempestade/noite
-  if (SH.lanternLights) {
+  // Lanternas quentes do navio acendem no crepúsculo/tempestade/noite se estiverem ativadas
+  if (SH.lanterns) {
     const nightLanternFactor = celestial.isMoon ? 0.85 : 0.0;
     const lInt = Math.max(.2, (s - .2) * 1.8) + ff * 1.2 + nightLanternFactor;
-    SH.lanternLights.forEach(l => l.intensity = lInt * (1 + .08 * Math.sin(now * .008)));
+    SH.lanterns.forEach(lant => {
+      if (lant.on) {
+        lant.light.intensity = lInt * (1 + .08 * Math.sin(now * .008));
+        lant.mat.emissiveIntensity = 0.95 * (1 + .05 * Math.sin(now * .008));
+      } else {
+        lant.light.intensity = 0;
+        lant.mat.emissiveIntensity = 0;
+      }
+    });
   }
 
   // Vibração suave de câmera durante tempestade ou relâmpagos
