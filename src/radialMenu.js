@@ -3,6 +3,7 @@ import { setFpv } from './ship/player.js';
 import { SH } from './ship/ship.js';
 import { cv } from './core/renderer.js';
 import { fishingSystem } from './world/fishing.js';
+import { bestiaryModal } from './ui/BestiaryModal.js';
 
 let setAllFn = null;
 let activeMenu = 'main';
@@ -309,6 +310,16 @@ const MENUS = {
         target: 'backpack_slots'
       },
       {
+        id: 'bestiary',
+        label: 'Bestiário',
+        icon: '📖',
+        desc: 'Registro de criaturas descobertas',
+        action: () => {
+          if (bestiaryModal) bestiaryModal.open();
+          closeRadialMenu();
+        }
+      },
+      {
         id: 'fishing_rod',
         label: 'Vara de Pesca',
         icon: '🎣',
@@ -389,6 +400,11 @@ export function closeRadialMenu() {
   if (overlay) {
     overlay.style.display = 'none';
   }
+  
+  // Se o Bestiário estiver aberto, não recapturamos o mouse
+  const bestiary = document.getElementById('bestiary-modal');
+  if (bestiary && bestiary.style.display === 'flex') return;
+
   if (CAM.fpv && GAME.state === 'PLAY') {
     const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.matchMedia("(pointer: coarse)").matches;
     if (!isTouch && cv) {

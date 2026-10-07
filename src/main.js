@@ -12,7 +12,7 @@ import { setupUI, updWindHud, updAnchor } from './ui.js';
 import { isRadialMenuOpen, updateRadialSelectionByDirection, executeSelectedRadialAction } from './radialMenu.js';
 import { fishManager } from './world/fish.js';
 import { fishingSystem } from './world/fishing.js';
-import { fishViewerModal } from './ui/FishViewerModal.js';
+import { bestiaryModal } from './ui/BestiaryModal.js';
 import './pwa.js';
 
 let vy = 0, pt = 0, rl = 0;
@@ -416,8 +416,8 @@ AN.az = ST.pz + 5;
 ILHAS.update(ST.px, ST.pz, 0);
 ILHAS.prime();
 
-window.fishViewerModal = fishViewerModal;
-fishViewerModal.init();
+window.bestiaryModal = bestiaryModal;
+bestiaryModal.init();
 fishingSystem.init();
 fishManager.spawnEcosystem(s0.x, s0.z);
 

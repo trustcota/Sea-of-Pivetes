@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { cam, sc, cv } from '../core/renderer.js';
-import { ST, CAM, GAME } from '../core/state.js';
+import { ST, CAM, GAME, joy } from '../core/state.js';
 import { H } from './ocean.js';
 import { SPC, buildFish, swim, createArticulatedFishMesh } from './fish.js';
 
@@ -171,7 +171,9 @@ export class FishingSystem {
       tnf: null,
       sbb: null,
       sbf: null,
-      btnToggle: null
+      btnToggle: null,
+      btnAction: null,
+      actionLabel: null
     };
 
     // Áudio Web Audio procedural sintetizado
@@ -559,8 +561,16 @@ export class FishingSystem {
     };
 
     GAME.backpack.push(item);
+    
+    // Registra no Bestiário se for nova espécie
+    if (!GAME.discoveredSpecies.includes(item.speciesId)) {
+      GAME.discoveredSpecies.push(item.speciesId);
+      this.say(`✨ NOVO REGISTRO: ${item.name}!`, 3.5);
+    } else {
+      this.say(`${item.name} (${fmtWeight(item.weight)}) guardado!`, 2.5);
+    }
+    
     this.playSfx('catch');
-    this.say(`${item.name} (${fmtWeight(item.weight)}) guardado!`, 2.5);
     
     this.detach();
     this.fish = null;
@@ -584,6 +594,7 @@ export class FishingSystem {
       return;
     }
     this.equipped = true;
+    document.body.classList.add('fishing-active');
     this.currentRodIdx = k;
     this.buildRod(k);
 
@@ -609,6 +620,7 @@ export class FishingSystem {
 
   unequip() {
     this.equipped = false;
+    document.body.classList.remove('fishing-active');
     if (this.rod) this.rod.visible = false;
     this.detach();
     this.fish = null;
@@ -646,8 +658,34 @@ export class FishingSystem {
     this.ui.tnf = document.getElementById('fishing-tnf');
     this.ui.sbb = document.getElementById('fishing-sbb');
     this.ui.sbf = document.getElementById('fishing-sbf');
+    this.ui.btnAction = document.getElementById('btn-fishing-action');
+    this.ui.actionLabel = document.getElementById('fishing-action-label');
+
+    if (this.ui.btnAction) {
+      this.ui.btnAction.addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        this.handleActionDown();
+      });
+      this.ui.btnAction.addEventListener('pointerup', e => {
+        e.stopPropagation();
+        this.handleActionUp();
+      });
+      this.ui.btnAction.addEventListener('pointercancel', e => {
+        e.stopPropagation();
+        this.handleActionUp();
+      });
+    }
 
     this.updateCatchLog();
+  }
+
+  handleActionDown() {
+    if (!this.equipped || GAME.state !== 'PLAY' || !CAM.fpv) return;
+    this.hold = this.pressed = 1;
+  }
+
+  handleActionUp() {
+    this.hold = 0;
   }
 
   setupInputs() {
@@ -660,6 +698,10 @@ export class FishingSystem {
 
     window.addEventListener('pointerdown', e => {
       if (!this.equipped || GAME.state !== 'PLAY' || !CAM.fpv) return;
+      // No mobile, ignoramos o clique global para pescar se o botão estiver presente
+      const isTouch = e.pointerType !== 'mouse';
+      if (isTouch && this.ui.btnAction && this.ui.btnAction.style.display !== 'none') return;
+
       if (e.target.closest('#fishing-sel') || e.target.closest('#settings-modal') || e.target.closest('#controls-modal') || e.target.closest('#radial-orders-overlay') || e.target.closest('.modal-overlay')) return;
       look(e);
       this.hold = this.pressed = 1;
@@ -699,8 +741,12 @@ export class FishingSystem {
     const ld = this.fish ? this.fish.w / CAP[this.currentRodIdx] : 0;
     const k5 = Math.min(1, dt * 5);
 
-    this.yaw += (.7 * Math.tanh(-this.mx * 1.3 / .7) - this.yaw) * k5;
-    this.pitch += (-this.my * .3 - .04 - this.pitch) * k5;
+    // Usa o analógico (joystick) se estiver ativo no mobile, senão usa posição do mouse/ponteiro
+    const targetX = (joy.id >= 0) ? joy.dx : this.mx;
+    const targetY = (joy.id >= 0) ? joy.dy : this.my;
+
+    this.yaw += (.7 * Math.tanh(-targetX * 1.3 / .7) - this.yaw) * k5;
+    this.pitch += (-targetY * .3 - .04 - this.pitch) * k5;
     this.lag += (this.yaw - this.lag) * Math.min(1, dt * 6);
 
     // MÁQUINA DE ESTADOS DE PESCA
@@ -970,18 +1016,35 @@ export class FishingSystem {
 
   updateHUD() {
     const HINTS = {
-      idle: 'Segure o clique ou Espaço para carregar a força, solte para lançar',
-      charge: 'Solte para arremessar o anzol ao mar',
+      idle: 'Prepare o arremesso!',
+      charge: 'Solte para lançar!',
       cast: 'Arremessando…',
-      wait: 'Aguardando fisgada… clique ou segure para recolher a linha',
-      bite: 'Fisgou! Segure para puxar imediatamente!',
-      reel: this.fish ? 'Brigue com o peixe! Solte se a barra ficar vermelha!' : 'Recolhendo linha…',
-      catch: this.fish ? `${this.fish.nw ? '✨ Nova espécie! ' : ''}${this.fish.n} (${this.fish.l}) · ${fmtWeight(this.fish.w)} · Clique para guardar` : ''
+      wait: 'Aguardando fisgada…',
+      bite: 'FISGOU! PUXE!',
+      reel: this.fish ? 'BRIGUE COM O PEIXE!' : 'Recolhendo linha…',
+      catch: this.fish ? `${this.fish.nw ? '✨ Nova espécie! ' : ''}${this.fish.n} · ${fmtWeight(this.fish.w)}` : ''
+    };
+
+    const LABELS = {
+      idle: 'LANÇAR ISCA',
+      charge: 'LANÇAR ISCA',
+      cast: 'LANÇANDO...',
+      wait: 'RECOLHER',
+      bite: 'RECOLHER',
+      reel: 'RECOLHER',
+      catch: 'COLETAR'
     };
 
     const hintTxt = this.statusTimer > 0 ? this.statusMsg : (this.equipped ? HINTS[this.state] : '');
     if (this.ui.hint && this.ui.hint.textContent !== hintTxt) {
       this.ui.hint.textContent = hintTxt;
+    }
+
+    if (this.ui.btnAction) {
+      this.ui.btnAction.style.display = this.equipped ? 'flex' : 'none';
+      if (this.ui.actionLabel) {
+        this.ui.actionLabel.textContent = LABELS[this.state] || '...';
+      }
     }
 
     if (this.ui.arw) this.ui.arw.style.display = 'none';
@@ -995,7 +1058,7 @@ export class FishingSystem {
       this.ui.tnb.style.opacity = this.state === 'reel' && this.fish ? '1' : '0';
       if (this.ui.tnf) {
         this.ui.tnf.style.width = (this.tension * 100) + '%';
-        this.ui.tnf.style.background = this.tension > .85 ? '#ff6a55' : '#c5921f';
+        this.ui.tnf.style.background = this.tension > .85 ? '#ff6a55' : '#FFD400';
       }
     }
 

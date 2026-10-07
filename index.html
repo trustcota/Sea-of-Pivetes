@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="./src/styles.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=JetBrains+Mono:wght@400;700&family=Sacramento&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="lens-drops" class="lens-drops-overlay"></div>
@@ -93,6 +93,11 @@
   <div class="fishing-bar" id="fishing-pwb"><i id="fishing-pwf"></i></div>
   <div class="fishing-bar" id="fishing-sbb"><i id="fishing-sbf"></i></div>
   <div class="fishing-bar" id="fishing-tnb"><i id="fishing-tnf"></i></div>
+  
+  <!-- Botão de Ação de Pesca (Mobile) -->
+  <button id="btn-fishing-action" class="fishing-action-btn" style="display: none;">
+    <span id="fishing-action-label">LANÇAR ISCA</span>
+  </button>
 </div>
 
 <!-- Banner Toast de Notificação de Ordem do Capitão -->
@@ -379,7 +384,62 @@
   </div>
 </div>
 
-<!-- Modal de Inspeção 3D de Peixes Articulados -->
+<!-- Modal do Bestiário (O Livro do Navegador) -->
+<div id="bestiary-modal" class="modal-overlay" style="display: none;">
+  <div class="book-container">
+    <button id="btn-close-bestiary" class="book-close-btn" title="Fechar Livro">✕</button>
+    
+    <div class="book-page">
+      <div id="bestiary-intro-content" class="book-intro-page" style="display: none;">
+        <h1 class="cursive-title" style="font-size: 54px; margin-bottom: 20px;">Diário de Observação</h1>
+        <p class="cursive-body" style="max-width: 500px; text-align: center; font-size: 26px; line-height: 1.4;">
+          Aos que navegarem por estas águas, que este registro sirva como guia e testemunho das maravilhas que habitam o abismo.<br><br>
+          Que a curiosidade seja maior que o medo da tempestade.
+        </p>
+        <div style="margin-top: 40px; opacity: 0.6;" class="cursive-body">— Capitão do Galeão</div>
+      </div>
+
+      <div id="bestiary-summary-content" class="book-summary-page" style="display: none;">
+        <h2 class="cursive-title" style="font-size: 42px; margin-bottom: 20px;">Sumário de Espécies</h2>
+        <div id="bestiary-summary-list" class="summary-list cursive-body">
+          <!-- Gerado dinamicamente -->
+        </div>
+      </div>
+
+      <div id="bestiary-species-content" class="book-content" style="display: none;">
+        <!-- Lado Esquerdo: Imagem -->
+        <div class="book-visual">
+          <canvas id="bestiary-canvas"></canvas>
+        </div>
+        
+        <!-- Lado Direito: Texto Artesanal -->
+        <div id="bestiary-species-text" class="book-text">
+          <h2 id="bestiary-name" class="cursive-title">Atum-azul</h2>
+          <p id="bestiary-sci" class="cursive-sci">Thunnus thynnus</p>
+          
+          <div class="book-stats cursive-body">
+            <span id="bestiary-cat">Pelágico Veloz</span>
+            <span id="bestiary-size">1.8m - 2.5m</span>
+            <span id="bestiary-hab">Mar Aberto</span>
+          </div>
+          
+          <p id="bestiary-desc" class="cursive-desc">
+            Um torpedo prateado que corta as águas com uma velocidade assustadora.
+          </p>
+        </div>
+      </div>
+      
+      <!-- Navegação de Páginas -->
+      <div class="book-nav">
+        <button id="bestiary-prev" class="book-nav-btn">◀</button>
+        <span id="bestiary-page-num" class="cursive-body">Intro</span>
+        <button id="bestiary-next" class="book-nav-btn">▶</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Inspeção 3D de Peixes Articulados (Antigo - Oculto ou Removido se preferir) -->
 <div id="fish-modal" class="modal-overlay" style="display: none;">
   <div class="modal-card fish-modal-card">
     <div class="modal-header">
