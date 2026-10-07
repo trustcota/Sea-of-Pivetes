@@ -72,10 +72,28 @@
 </button>
 
 <!-- Botões Flutuantes In-Game -->
-<button id="btn-radial-orders" class="radial-orders-trigger-btn in-game-hud" title="Ordens do Capitão" style="display: none;">
-  <span class="radial-btn-icon">📜</span>
-  <span class="radial-btn-label">ORDENS</span>
-</button>
+<div class="ingame-floating-actions in-game-hud">
+  <button id="btn-radial-orders" class="radial-orders-trigger-btn" title="Ordens do Capitão (Tecla Q)">
+    <span class="radial-btn-icon">📜</span>
+    <span class="radial-btn-label">ORDENS</span>
+  </button>
+  <button id="btn-radial-inventory" class="inventory-trigger-btn" title="Inventário (Tecla Tab)">
+    <span class="radial-btn-icon">🎒</span>
+    <span class="radial-btn-label">MOCHILA</span>
+  </button>
+</div>
+
+<!-- HUD do Sistema de Pesca Low Poly -->
+<div id="fishing-hud" class="fishing-hud in-game-hud" style="display: none;">
+  <div id="fishing-top">
+    <div id="fishing-rn"></div>
+  </div>
+  <div id="fishing-arw" style="display: none;"></div>
+  <div id="fishing-hint"></div>
+  <div class="fishing-bar" id="fishing-pwb"><i id="fishing-pwf"></i></div>
+  <div class="fishing-bar" id="fishing-sbb"><i id="fishing-sbf"></i></div>
+  <div class="fishing-bar" id="fishing-tnb"><i id="fishing-tnf"></i></div>
+</div>
 
 <!-- Banner Toast de Notificação de Ordem do Capitão -->
 <div id="order-toast" class="order-toast-banner"></div>
@@ -265,6 +283,18 @@
       <div class="ctrl-row">
         <span class="ctrl-key">Tecla V</span>
         <span class="ctrl-desc">Alternar entre primeira pessoa e visão orbital</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-key">Tecla Tab</span>
+        <span class="ctrl-desc">Abrir / fechar Inventário do Player</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-key">Tecla F</span>
+        <span class="ctrl-desc">Equipar ou guardar vara de pescar</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-key">Clique / Espaço</span>
+        <span class="ctrl-desc">Carregar arremesso / Recolher linha e brigar com peixe</span>
       </div>
       <div class="ctrl-row">
         <span class="ctrl-key">Esc</span>

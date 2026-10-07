@@ -2,6 +2,7 @@ import { AN, HM, CAM, GAME, INT } from './core/state.js';
 import { setFpv } from './ship/player.js';
 import { SH } from './ship/ship.js';
 import { cv } from './core/renderer.js';
+import { fishingSystem } from './world/fishing.js';
 
 let setAllFn = null;
 let activeMenu = 'main';
@@ -148,6 +149,7 @@ const MENUS = {
     ]
   },
   submenus: {
+    parent: 'main',
     title: '⚙️ CATEGORIAS DE ORDENS',
     items: [
       { id: 'anc_menu', label: 'Âncora', icon: '⚓', desc: 'Opções de Âncora', target: 'anchor' },
@@ -158,6 +160,7 @@ const MENUS = {
     ]
   },
   anchor: {
+    parent: 'submenus',
     title: '⚓ ORDENS: ÂNCORA',
     items: [
       {
@@ -186,6 +189,7 @@ const MENUS = {
     ]
   },
   sails: {
+    parent: 'submenus',
     title: '⛵ ORDENS: VELAS',
     items: [
       {
@@ -226,6 +230,7 @@ const MENUS = {
     ]
   },
   rigs: {
+    parent: 'sails',
     title: '🔄 ORDENS: GIRAR VERGAS (VELAS)',
     items: [
       {
@@ -265,6 +270,7 @@ const MENUS = {
     ]
   },
   camera: {
+    parent: 'submenus',
     title: '👁️ ORDENS: CÂMERA',
     items: [
       {
@@ -291,6 +297,66 @@ const MENUS = {
       },
       { id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar ao menu anterior', target: 'submenus' }
     ]
+  },
+  inventory: {
+    title: '🎒 INVENTÁRIO DO EXPLORADOR',
+    items: [
+      {
+        id: 'backpack',
+        label: 'Mochila',
+        icon: '🎒',
+        desc: 'Sua mochila de expedição',
+        target: 'backpack_slots'
+      },
+      {
+        id: 'fishing_rod',
+        label: 'Vara de Pesca',
+        icon: '🎣',
+        desc: 'Equipar ou guardar sua vara de pesca artesanal',
+        action: () => {
+          if (fishingSystem) fishingSystem.toggleFishing();
+          closeRadialMenu();
+        }
+      },
+      { id: 'close', label: 'Fechar', icon: '✕', desc: 'Fechar inventário', action: () => closeRadialMenu() }
+    ]
+  },
+  backpack_slots: {
+    parent: 'inventory',
+    get title() { return `🎒 MOCHILA (${GAME.backpack.length}/8)`; },
+    get items() {
+      const items = [];
+      for (let i = 0; i < 8; i++) {
+        const fish = GAME.backpack[i];
+        if (fish) {
+          items.push({
+            id: `slot_${fish.id}`,
+            label: fish.name,
+            icon: fish.icon,
+            desc: `${(fish.weight < 1 ? (fish.weight * 1000).toFixed(0) + ' g' : fish.weight.toFixed(1) + ' kg')}`,
+            action: () => {
+              // Ação ao clicar no peixe: Abrir menu de contexto (Descartar por enquanto)
+              const discard = confirm(`Deseja descartar este ${fish.name}?`);
+              if (discard) {
+                GAME.backpack.splice(i, 1);
+                showOrderToast(`🗑️ ${fish.name} descartado.`);
+                renderRadialMenu();
+              }
+            }
+          });
+        } else {
+          items.push({
+            id: `empty_${i}`,
+            label: 'Vazio',
+            icon: '🔲',
+            desc: 'Espaço livre',
+            action: () => showOrderToast('🔲 Este slot está vazio.')
+          });
+        }
+      }
+      items.push({ id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar ao inventário', target: 'inventory' });
+      return items;
+    }
   }
 };
 
@@ -333,10 +399,12 @@ export function closeRadialMenu() {
 
 export function updateRadialOrdersVisibility() {
   const triggerBtn = document.getElementById('btn-radial-orders');
-  if (triggerBtn) {
-    const show = GAME.state === 'PLAY' && CAM.fpv && GAME.canControl;
-    triggerBtn.style.display = show ? 'flex' : 'none';
-  }
+  const invBtn = document.getElementById('btn-radial-inventory');
+  const show = GAME.state === 'PLAY' && CAM.fpv && GAME.canControl;
+  
+  if (triggerBtn) triggerBtn.style.display = show ? 'flex' : 'none';
+  if (invBtn) invBtn.style.display = show ? 'flex' : 'none';
+
   if (!CAM.fpv || GAME.state !== 'PLAY') {
     if (isOpen) closeRadialMenu();
   }
@@ -354,13 +422,13 @@ function sectorPath(rIn, rOut, a1, a2) {
 function renderRadialMenu() {
   const menu = MENUS[activeMenu] || MENUS.main;
   const titleEl = document.getElementById('radial-title');
-  if (titleEl) titleEl.textContent = menu.title;
+  if (titleEl) titleEl.textContent = typeof menu.title === 'function' ? menu.title() : menu.title;
 
   const slicesGroup = document.getElementById('gta-slices-group');
   if (!slicesGroup) return;
   slicesGroup.innerHTML = '';
 
-  const items = menu.items;
+  const items = typeof menu.items === 'function' ? menu.items() : menu.items;
   const total = items.length;
   if (!total) return;
 
@@ -431,8 +499,9 @@ function renderRadialMenu() {
     if (hubText) hubText.textContent = cur.label || 'ORDEM';
     if (hubDesc) hubDesc.textContent = cur.desc || '';
   } else {
-    if (hubIcon) hubIcon.textContent = activeMenu === 'main' ? '⚓' : '↩';
-    if (hubText) hubText.textContent = activeMenu === 'main' ? 'ORDENS' : 'VOLTAR';
+    const parentMenu = menu.parent;
+    if (hubIcon) hubIcon.textContent = parentMenu ? '↩' : '✕';
+    if (hubText) hubText.textContent = parentMenu ? 'VOLTAR' : 'FECHAR';
     if (hubDesc) hubDesc.textContent = '';
   }
 }
@@ -451,7 +520,7 @@ function executeItem(item) {
 export function updateRadialSelectionByDirection(dx, dy) {
   if (!isOpen) return;
   const menu = MENUS[activeMenu] || MENUS.main;
-  const items = menu.items;
+  const items = typeof menu.items === 'function' ? menu.items() : menu.items;
   const total = items.length;
   if (!total) return;
 
@@ -487,11 +556,22 @@ export function updateRadialSelectionByDirection(dx, dy) {
 
 export function executeSelectedRadialAction() {
   if (!isOpen) return false;
+  const menu = MENUS[activeMenu] || MENUS.main;
+  const items = typeof menu.items === 'function' ? menu.items() : menu.items;
   if (selectedIndex >= 0) {
-    const menu = MENUS[activeMenu] || MENUS.main;
-    const item = menu.items[selectedIndex];
+    const item = items[selectedIndex];
     if (item) {
       executeItem(item);
+      return true;
+    }
+  } else if (selectedIndex === -1) {
+    // Ação no Hub Central: Voltar ou Fechar
+    if (menu.parent) {
+      activeMenu = menu.parent;
+      renderRadialMenu();
+      return true;
+    } else {
+      closeRadialMenu();
       return true;
     }
   }
@@ -505,10 +585,22 @@ export function setupRadialMenu(helpers) {
   if (triggerBtn) {
     triggerBtn.onclick = (e) => {
       e.stopPropagation();
-      if (isOpen) {
+      if (isOpen && activeMenu === 'main') {
         closeRadialMenu();
       } else {
         openRadialMenu('main');
+      }
+    };
+  }
+
+  const invBtn = document.getElementById('btn-radial-inventory');
+  if (invBtn) {
+    invBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (isOpen && activeMenu === 'inventory') {
+        closeRadialMenu();
+      } else {
+        openRadialMenu('inventory');
       }
     };
   }
@@ -609,6 +701,17 @@ export function setupRadialMenu(helpers) {
       return;
     }
 
+    if (e.code === 'Tab' && e.target.tagName !== 'INPUT') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!e.repeat && GAME.state === 'PLAY' && CAM.fpv && GAME.canControl) {
+        if (!isOpen) {
+          openRadialMenu('inventory');
+        }
+      }
+      return;
+    }
+
     if (!isOpen) return;
 
     if (e.code === 'Escape') {
@@ -640,7 +743,7 @@ export function setupRadialMenu(helpers) {
   });
 
   window.addEventListener('keyup', (e) => {
-    if (e.code === 'KeyQ' && e.target.tagName !== 'INPUT') {
+    if ((e.code === 'KeyQ' || e.code === 'Tab') && e.target.tagName !== 'INPUT') {
       e.preventDefault();
       e.stopPropagation();
       if (isOpen) {

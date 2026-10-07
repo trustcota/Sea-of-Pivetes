@@ -11,6 +11,7 @@ import { setFpv, resetPlayer, updFPV, updGlow, updGlowHelm, qD } from './ship/pl
 import { setupUI, updWindHud, updAnchor } from './ui.js';
 import { isRadialMenuOpen, updateRadialSelectionByDirection, executeSelectedRadialAction } from './radialMenu.js';
 import { fishManager } from './world/fish.js';
+import { fishingSystem } from './world/fishing.js';
 import { fishViewerModal } from './ui/FishViewerModal.js';
 import './pwa.js';
 
@@ -383,6 +384,7 @@ function loop(now) {
 
   ILHAS.update(ST.px, ST.pz, dt);
   fishManager.update(dt, now, ST.px, ST.pz);
+  fishingSystem.update(dt, now);
   mapTick(dt);
   R.render(sc, cam);
 }
@@ -416,6 +418,7 @@ ILHAS.prime();
 
 window.fishViewerModal = fishViewerModal;
 fishViewerModal.init();
+fishingSystem.init();
 fishManager.spawnEcosystem(s0.x, s0.z);
 
 requestAnimationFrame(loop);

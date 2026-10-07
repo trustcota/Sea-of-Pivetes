@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FISH_SPECIES, createArticulatedFishMesh, fishManager } from '../world/fish.js';
+import { FISH_SPECIES, createArticulatedFishMesh, swim, fishManager } from '../world/fish.js';
 import { ST } from '../core/state.js';
 
 const T = THREE;
@@ -12,14 +12,14 @@ export class FishViewerModal {
     this.scene = null;
     this.camera = null;
     this.currentMeshObj = null;
-    this.currentSpeciesId = 'tubarao';
+    this.currentSpeciesId = 'atum';
     this.animSpeed = 1.0;
     this.showWireframe = false;
     this.animReqId = null;
     this.animTime = 0;
     this.camYaw = 0.5;
     this.camPitch = 0.2;
-    this.camDist = 4.5;
+    this.camDist = 4.2;
     this.isDragging = false;
     this.lastPointerX = 0;
     this.lastPointerY = 0;
@@ -31,7 +31,6 @@ export class FishViewerModal {
 
     if (!this.modalEl || !this.canvasEl) return;
 
-    // Conecta botões de abrir/fechar
     const btnClose = document.getElementById('btn-close-fish-modal');
     if (btnClose) {
       btnClose.onclick = () => this.close();
@@ -47,7 +46,6 @@ export class FishViewerModal {
       btnOpenTitle.onclick = () => this.open();
     }
 
-    // Inicializa WebGL Renderer local para a inspeção 3D do peixe
     const width = 480;
     const height = 360;
     this.renderer = new T.WebGLRenderer({
@@ -56,23 +54,21 @@ export class FishViewerModal {
       alpha: true
     });
     this.renderer.setSize(width, height, false);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
     this.scene = new T.Scene();
     this.camera = new T.PerspectiveCamera(45, width / height, 0.1, 100);
 
-    // Luzes da cena de inspeção 3D
     const hemiLight = new T.HemisphereLight(0x38bdf8, 0x0f172a, 1.2);
     const dirLight = new T.DirectionalLight(0xfff0d0, 1.5);
     dirLight.position.set(5, 8, 5);
     this.scene.add(hemiLight, dirLight);
 
-    // Controles de rotação com mouse/toque no canvas
     this.canvasEl.onpointerdown = (e) => {
       this.isDragging = true;
       this.lastPointerX = e.clientX;
       this.lastPointerY = e.clientY;
-      this.canvasEl.setPointerCapture(e.pointerId);
+      try { this.canvasEl.setPointerCapture(e.pointerId); } catch (_) {}
     };
 
     window.addEventListener('pointermove', (e) => {
@@ -94,10 +90,8 @@ export class FishViewerModal {
       e.preventDefault();
     };
 
-    // Monta a lista de espécies na barra lateral
     this.renderSpeciesGrid();
 
-    // Controles da UI
     const wireBtn = document.getElementById('fish-wireframe-toggle');
     if (wireBtn) {
       wireBtn.onclick = () => {
@@ -141,24 +135,20 @@ export class FishViewerModal {
   selectSpecies(speciesId) {
     this.currentSpeciesId = speciesId;
 
-    // Atualiza botões ativos
     document.querySelectorAll('.fish-species-btn').forEach(b => {
       b.classList.toggle('active', b.getAttribute('data-species') === speciesId);
     });
 
-    // Remove modelo atual
     if (this.currentMeshObj) {
       this.scene.remove(this.currentMeshObj.group);
       this.currentMeshObj = null;
     }
 
-    // Cria novo modelo articulado
     this.currentMeshObj = createArticulatedFishMesh(speciesId);
     this.scene.add(this.currentMeshObj.group);
 
-    // Ajusta câmera pelo tamanho do peixe
     const sp = FISH_SPECIES.find(s => s.id === speciesId);
-    this.camDist = speciesId === 'arraia' || speciesId === 'marlin' ? 5.5 : 3.8;
+    this.camDist = speciesId === 'arraia' || speciesId === 'moreia' || speciesId === 'tubarao_branco' ? 5.8 : 4.0;
 
     this.applyWireframeState();
     this.updateInfoCard(sp);
@@ -204,7 +194,6 @@ export class FishViewerModal {
     this.modalEl.style.display = 'flex';
     this.selectSpecies(this.currentSpeciesId);
 
-    // Inicia loop de renderização do preview
     let lastNow = performance.now();
     const loopPreview = () => {
       const now = performance.now();
@@ -213,30 +202,11 @@ export class FishViewerModal {
 
       this.animTime += dt * this.animSpeed;
 
-      // Anima articulações do peixe em exibição
       if (this.currentMeshObj) {
-        const { group, joints, wings } = this.currentMeshObj;
-        const phase = this.animTime * 6.0;
-
-        joints.forEach((j, idx) => {
-          j.rotation.y = Math.sin(phase - idx * 0.5) * (idx + 1) * 0.09;
-        });
-
-        if (this.currentSpeciesId === 'arraia' && wings.length >= 2) {
-          const wingFlap = Math.sin(this.animTime * 3.0) * 0.4;
-          wings[0].l1.rotation.z = wingFlap;
-          wings[0].l2.rotation.z = Math.sin(this.animTime * 3.0 - 0.3) * 0.3;
-          wings[0].l3.rotation.z = Math.sin(this.animTime * 3.0 - 0.6) * 0.2;
-
-          wings[1].r1.rotation.z = -wingFlap;
-          wings[1].r2.rotation.z = -Math.sin(this.animTime * 3.0 - 0.3) * 0.3;
-          wings[1].r3.rotation.z = -Math.sin(this.animTime * 3.0 - 0.6) * 0.2;
-        }
-
-        group.rotation.y = Math.sin(this.animTime * 1.5) * 0.15;
+        swim(this.currentMeshObj.fishObj, this.animTime, 1, 1);
+        this.currentMeshObj.group.rotation.y = Math.sin(this.animTime * 0.8) * 0.12;
       }
 
-      // Atualiza posição da câmera orbital da inspeção
       const cx = Math.sin(this.camYaw) * Math.cos(this.camPitch) * this.camDist;
       const cy = Math.sin(this.camPitch) * this.camDist;
       const cz = Math.cos(this.camYaw) * Math.cos(this.camPitch) * this.camDist;
@@ -263,7 +233,6 @@ export class FishViewerModal {
       return;
     }
 
-    // Calcula peixe selvagem mais próximo do navio
     let minDist = 9999;
     let closestFish = null;
 
