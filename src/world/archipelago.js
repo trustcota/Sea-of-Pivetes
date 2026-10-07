@@ -70,18 +70,18 @@ const clump = mk => () => { const g = new T.Group(), n = 4 + (rnd() * 3 | 0); fo
 
 /* ===== Ajustes de geração: altere só aqui (unidades do mundo) ===== */
 const GEN = {
- height: 4.6,      // altura média das ilhas acima do nível do mar
- rockyBonus: 2.8,  // altura extra do bioma Costão rochoso
+ height: 8.5,      // altura média das ilhas acima do nível do mar (aumentada para ilhas maiores)
+ rockyBonus: 4.2,  // altura extra do bioma Costão rochoso
  heightVar: .35,   // variação de altura entre ilhas (0 = todas iguais)
- rise: .6,         // suavidade da subida da praia ao topo (maior = encosta mais suave)
- depth: 9,         // profundidade do oceano: fundo abaixo do nível do mar
- shelf: .8,        // largura da plataforma rasa ao redor das ilhas (maior = declive mais suave)
- spacing: 140,     // distância entre as células da grade de ilhas
- gap: 16,          // folga mínima entre as bordas de ilhas vizinhas
- rMin: 19, rMax: 34, // raio das ilhas
- density: .85      // chance de cada célula da grade ter uma ilha
+ rise: 1.1,        // suavidade da subida da praia ao topo (praia e encosta mais amplas)
+ depth: 12,        // profundidade do oceano: fundo abaixo do nível do mar
+ shelf: 1.6,       // largura da plataforma rasa ao redor das ilhas (declive suave)
+ spacing: 220,     // distância entre as células da grade de ilhas
+ gap: 24,          // folga mínima entre as bordas de ilhas vizinhas
+ rMin: 38, rMax: 70, // raio das ilhas (muito maiores)
+ density: .80      // chance de cada célula da grade ter uma ilha
 };
-const HZ = 0xeaf3ea, CS = 48, N = 16, SEA = -.18, SH = .25; let IC, JM, SKD; const calc = () => { IC = GEN.spacing; JM = Math.min(.45, (GEN.rMax * 1.33 + GEN.gap / 2) / IC); SKD = Math.max(3.5, (GEN.height + GEN.rockyBonus) * 1.2) }; calc();
+const HZ = 0xeaf3ea, CS = 48, N = 16, SEA = 0.0, SH = .25; let IC, JM, SKD; const calc = () => { IC = GEN.spacing; JM = Math.min(.45, (GEN.rMax * 1.33 + GEN.gap / 2) / IC); SKD = Math.max(3.5, (GEN.height + GEN.rockyBonus) * 1.2) }; calc();
 const MAT = new T.MeshLambertMaterial({ vertexColors: true }), $ = id => document.getElementById(id);
 const geo = (p, c, n) => { const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(p, 3)); g.setAttribute('color', new T.BufferAttribute(c, 3)); g.setAttribute('normal', new T.BufferAttribute(n, 3)); return g };
 const fnorm = p => { const n = new Float32Array(p.length); for (let i = 0; i < p.length; i += 9) { const ax = p[i + 3] - p[i], ay = p[i + 4] - p[i + 1], az = p[i + 5] - p[i + 2], bx = p[i + 6] - p[i], by = p[i + 7] - p[i + 1], bz = p[i + 8] - p[i + 2]; let x = ay * bz - az * by, y = az * bx - ax * bz, z = ax * by - ay * bx; const l = Math.hypot(x, y, z) || 1; x /= l; y /= l; z /= l; for (let k = 0; k < 9; k += 3) { n[i + k] = x; n[i + k + 1] = y; n[i + k + 2] = z } } return n };
@@ -98,11 +98,33 @@ const rng = s => () => { s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15,
 const cells = new Map();
 const cell = (i, j) => { const k = i + ',' + j; let c = cells.get(k); if (c === undefined) { c = h2(i, j, 1) < GEN.density ? { x: (i + JM + (1 - 2 * JM) * h2(i, j, 2)) * IC, z: (j + JM + (1 - 2 * JM) * h2(i, j, 3)) * IC, r: GEN.rMin + (GEN.rMax - GEN.rMin) * h2(i, j, 4), b: h2(i, j, 5) * 6 | 0, s: 1 + GEN.heightVar * (h2(i, j, 6) * 2 - 1) } : null; cells.set(k, c) } return c };
 const F = { h: 0, b: 0, m: -1 };
-function field(x, z) { let m = -1, c0 = null; const ix = Math.floor(x / IC), iz = Math.floor(z / IC);
- for (let i = ix - 1; i <= ix + 1; i++) for (let j = iz - 1; j <= iz + 1; j++) { const c = cell(i, j); if (!c) continue; const dx = x - c.x, dz = z - c.z, a = Math.atan2(dz, dx), ca = Math.cos(a), sa = Math.sin(a), q = 1 - Math.hypot(dx, dz) / c.r / (1 + .5 * (vn(ca * 2.2 + c.x, sa * 2.2 + c.z) - .5) + .16 * (vn(ca * 5.5 + c.z * .7, sa * 5.5 + c.x * .7) - .5)); if (q > m) { m = q; c0 = c } }
+function field(x, z) {
+ let m = -1, c0 = null;
+ const ix = Math.floor(x / IC), iz = Math.floor(z / IC);
+ for (let i = ix - 1; i <= ix + 1; i++) {
+  for (let j = iz - 1; j <= iz + 1; j++) {
+   const c = cell(i, j);
+   if (!c) continue;
+   const dx = x - c.x, dz = z - c.z;
+   const distSq = dx * dx + dz * dz;
+   const maxR = c.r * 1.55;
+   if (distSq > maxR * maxR) continue;
+   const dist = Math.sqrt(distSq);
+   const a = Math.atan2(dz, dx), ca = Math.cos(a), sa = Math.sin(a);
+   const q = 1 - dist / c.r / (1 + .5 * (vn(ca * 2.2 + c.x, sa * 2.2 + c.z) - .5) + .16 * (vn(ca * 5.5 + c.z * .7, sa * 5.5 + c.x * .7) - .5));
+   if (q > m) { m = q; c0 = c }
+  }
+ }
  let h; const fine = (vn(x * .5, z * .5) - .5) * .3 * Math.min(Math.max(m, 0) * 2, 1);
- if (m < SH) h = SEA - GEN.depth * sm(Math.min((SH - m) / GEN.shelf, 1)) + fine; else if (c0) { const k = c0.b == 4, P = (GEN.height + (k ? GEN.rockyBonus : 0)) * c0.s, u = m - SH; h = SEA + P * (.7 * sm(Math.min(u / GEN.rise, 1)) + .3 * sm(Math.max(0, Math.min((m - .55) / .45, 1)))) + (vn(x * .11, z * .11) - .5) * (k ? .56 : .39) * P * sm(Math.min(u / .3, 1)) + fine }
- F.h = h; F.m = m; F.b = c0 ? c0.b : 0; return F }
+ if (m < SH) h = SEA - GEN.depth * sm(Math.min((SH - m) / GEN.shelf, 1)) + fine;
+ else if (c0) {
+  const k = c0.b == 4, P = (GEN.height + (k ? GEN.rockyBonus : 0)) * c0.s, u = m - SH;
+  h = SEA + P * (.7 * sm(Math.min(u / GEN.rise, 1)) + .3 * sm(Math.max(0, Math.min((m - .55) / .45, 1)))) + (vn(x * .11, z * .11) - .5) * (k ? .56 : .39) * P * sm(Math.min(u / .3, 1)) + fine;
+ } else {
+  h = SEA - GEN.depth + fine;
+ }
+ F.h = h; F.m = m; F.b = c0 ? c0.b : 0; return F;
+}
 
 /* biomas: cores do chão e quais modelos nascem em cada um */
 const BI = [
@@ -114,7 +136,7 @@ const BI = [
  { n: 'Tundra nevada', g: [0xf2f7fa, 0xdfeaf2], tn: .5, w: { pine: 7, boulder: 2, cluster: 1, slab: 1, stump: .6, logA: .5 } }];
 BI.forEach(B => { B.w.gr = 5; B.c0 = new T.Color(B.g[0]); B.c1 = new T.Color(B.g[1]); B.k = Object.keys(B.w); B.cw = []; let s = 0; B.k.forEach(k => B.cw.push(s += B.w[k])); B.tot = s });
 const SAND = new T.Color(0xf1dca0), SEAB = new T.Color(0xa08c66), DEEP_C = new T.Color(0x6e6350), tc = new T.Color();
-const gc = (b, h, x, z) => { tc.copy(BI[b].c0).lerp(BI[b].c1, vn(x * .09, z * .09)); if (h < .6) tc.lerp(SAND, sm(Math.min((.6 - h) / .6, 1))); if (h < -.2) tc.lerp(SEAB, Math.min((-.2 - h) / .6, 1)); if (h < -1) tc.lerp(DEEP_C, Math.min((-1 - h) / 2, 1)); return tc.multiplyScalar(.93 + .14 * vn(x * .45, z * .45)) };
+const gc = (b, h, x, z) => { tc.copy(BI[b].c0).lerp(BI[b].c1, vn(x * .09, z * .09)); if (h < 1.4) tc.lerp(SAND, sm(Math.min((1.4 - h) / 1.4, 1))); if (h < -.2) tc.lerp(SEAB, Math.min((-.2 - h) / .6, 1)); if (h < -1) tc.lerp(DEEP_C, Math.min((-1 - h) / 2, 1)); return tc.multiplyScalar(.93 + .14 * vn(x * .45, z * .45)) };
 
 /* biblioteca: 4 variações prontas de cada modelo, juntadas em uma geometria só */
 const DEF = { pine: [pine, 1.5, 1, 2.4, 3.3, .8], round: [round, 2.1, 1, 2.2, 3, .8], blossom: [blossom, 2, 1, 2.1, 2.8, .8], autumn: [autumn, 2.1, 1, 2.2, 3, .8], boulder: [boulder, 1.1, 1, 1.2, 2.4, 1], slab: [slab, 1.3, 1, 1.3, 2.2, 1], cluster: [cluster, 1.4, 1, 1.2, 1.9, 1], mossy: [mossy, 1.2, 1, 1.2, 2.1, 1], bushA: [bushA, 1.2, 0, 1.3, 1.8, 1], berry: [berry, 1.2, 0, 1.3, 1.7, 1], bloomB: [bloomB, 1.2, 0, 1.3, 1.7, 1], hedge: [hedge, 1.5, 0, 1.3, 1.7, 1], logA: [logA, 1.4, 0, 1.3, 1.7, 1], stump: [stump, .9, 0, 1.4, 2, 1], pile: [pile, 1, 0, 1.3, 1.6, 1], mossyLog: [mossyLog, 1.4, 0, 1.3, 1.7, 1], fD: [clump(daisy), .9, 0, .75, 1, 1], fT: [clump(tulip), .9, 0, .75, 1, 1], fS: [clump(sunflower), .9, 0, .75, 1, 1], fL: [clump(lavender), .9, 0, .75, 1, 1], gr: [() => { window.NT = 0; const g = grp(tuft(0, 0, 1.6), tuft(.5, .3, 1.2), tuft(-.4, .2, 1.3)); window.NT = 1; return g }, .6, 0, 1, 1.6, .5] };
@@ -159,7 +181,7 @@ function build(cx, cz, lod = 0) {
  const hz = (x, z) => { const lim = Nn + M - 1e-3, u = Math.max(-M, Math.min(lim, (x - x0) / S)), v = Math.max(-M, Math.min(lim, (z - z0) / S)), a = Math.floor(u), b = Math.floor(v), fu = u - a, fv = v - b, h00 = H[ix(a, b)], h10 = H[ix(a + 1, b)], h01 = H[ix(a, b + 1)], h11 = H[ix(a + 1, b + 1)]; return fu + fv <= 1 ? h00 + fu * (h10 - h00) + fv * (h01 - h00) : h11 + (1 - fu) * (h01 - h11) + (1 - fv) * (h10 - h11) };
  if (lod < 2) {
   const rr = rng(h2(cx, cz, 77) * 4294967295 | 0), inst = [];
-  for (let t = 0; t < 300; t++) { const x = x0 + rr() * CS, z = z0 + rr() * CS, f = field(x, z); if (f.h < .7 || f.m < .12) continue;
+  for (let t = 0; t < 300; t++) { const x = x0 + rr() * CS, z = z0 + rr() * CS, f = field(x, z); if (f.h < 1.5 || f.m < .12) continue;
    const B = BI[f.b], r = rr() * B.tot, k = B.k[B.cw.findIndex(v => v >= r)], d = DEF[k], sc2 = d[3] + rr() * (d[4] - d[3]), rd = d[1] * sc2 * d[5];
    if (inst.some(w => Math.hypot(w.x - x, w.z - z) < w.r + rd)) continue;
    const [ft, sx, rl] = CLS[CK[k]], fr = Math.max(FOOT[k][0], FOOT[k][1]) * sc2, hs = OFF.map(([a, b]) => hz(x + a * fr, z + b * fr)), lo = Math.min(...hs), hi = Math.max(...hs);
@@ -174,7 +196,7 @@ function build(cx, cz, lod = 0) {
   const kp = lod ? inst.filter(q => q.t) : inst; if (lod) kp.forEach(q => q.p = FAR[q.k][q.vi]);
   ch.col = lod ? [] : inst.filter(q => q.cr).map(q => [q.x, q.z, q.cr]); ch.big = merge(kp.filter(q => q.big)); ch.small = lod ? null : merge(kp.filter(q => !q.big));
   [ch.big, ch.small].forEach(m => m && ch.ms.push(m)) } else { const rr = rng(h2(cx, cz, 91) * 4294967295 | 0), inst = [];
-  for (let t = 0; t < 120; t++) { const x = x0 + rr() * CS, z = z0 + rr() * CS, f = field(x, z); if (f.h < .9 || f.m < .2) continue;
+  for (let t = 0; t < 120; t++) { const x = x0 + rr() * CS, z = z0 + rr() * CS, f = field(x, z); if (f.h < 1.8 || f.m < .2) continue;
    const B = BI[f.b], r = rr() * B.tot, k = B.k[B.cw.findIndex(v => v >= r)]; if (CK[k] != 't') continue;
    const d = DEF[k], sc2 = d[3] + rr() * (d[4] - d[3]), rd = d[1] * sc2 * d[5], fr = .4 * sc2; if (inst.some(w => Math.hypot(w.x - x, w.z - z) < w.r + rd)) continue;
    const lo = Math.min(hz(x, z), hz(x + fr, z), hz(x - fr, z), hz(x, z + fr), hz(x, z - fr)); if (!(lo >= .3)) continue;
@@ -195,6 +217,41 @@ function pump() { const t0 = performance.now(), lim = bud > 0 ? 24 : 7; bud--; w
 
 function tH(x, z) { const S = CS / N, i = Math.floor(x / S), j = Math.floor(z / S), u = x / S - i, v = z / S - j, a = field(i * S, j * S).h, b = field((i + 1) * S, j * S).h, c = field(i * S, (j + 1) * S).h, d = field((i + 1) * S, (j + 1) * S).h; return u + v <= 1 ? a + u * (b - a) + v * (c - a) : d + (1 - u) * (c - d) + (1 - v) * (b - d) }
 function nearestIsland(x, z) { const ix = Math.floor(x / IC), iz = Math.floor(z / IC); let b = null, bd = 1e9; for (let i = ix - 2; i <= ix + 2; i++) for (let j = iz - 2; j <= iz + 2; j++) { const c = cell(i, j); if (c) { const d = Math.hypot(c.x - x, c.z - z); if (d < bd) { bd = d; b = c } } } return b }
+
+/* Atenuação de ondas em aproximação de praias e terra firme */
+function waveDamp(x, z) {
+ const ix = Math.floor(x / IC), iz = Math.floor(z / IC);
+ let maxM = -1;
+ for (let i = ix - 1; i <= ix + 1; i++) {
+  for (let j = iz - 1; j <= iz + 1; j++) {
+   const c = cell(i, j);
+   if (!c) continue;
+   const dx = x - c.x, dz = z - c.z;
+   const dist = Math.hypot(dx, dz);
+   const q = 1 - dist / (c.r * 1.35);
+   if (q > maxM) maxM = q;
+  }
+ }
+ if (maxM <= -0.15) return 1.0;
+ if (maxM >= 0.22) return 0.0;
+ return Math.max(0.0, Math.min(1.0, (0.22 - maxM) / 0.37));
+}
+
+/* Amortecimento físico de ondas e proteção total contra invasão de água na praia */
+function waterClamp(x, z, rawWaveY) {
+ const th = tH(x, z);
+ if (th >= 0.0) {
+  return Math.min(-0.35, -0.35 - th * 0.8);
+ }
+ if (th > -2.2) {
+  const depth = -th;
+  const damp = Math.max(0.0, Math.min(1.0, depth / 2.2));
+  const dampedY = rawWaveY * damp;
+  return Math.min(dampedY, th - 0.08);
+ }
+ return rawWaveY;
+}
+
 window.MAP = { SEA, get floor() { return SEA - GEN.depth }, cfg: GEN, height: tH, depth: (x, z) => SEA - tH(x, z), isLand: (x, z) => tH(x, z) >= SEA, island: nearestIsland, biome: (x, z) => BI[field(x, z).b].n, get seed() { return WS } };
 
 const DRAFT = 1.8, HP = [[0, 5], [0, -5], [0, 0], [0, 2.5], [0, -2.5], [-2.2, 0], [2.2, 0]];
@@ -216,5 +273,5 @@ function regen() { cells.clear(); chunks.forEach(drop); chunks.clear(); queue.le
 function setCfg(k, v) { GEN[k] = v; calc(); regen() }
 function reseed() { WS = (Math.random() * 1e9 | 0) || 1; regen() }
 function setVD(v) { VD = v; plan.f = 1; bud = 50; }
-return { hit, startPos, safeNear, update, prime, setCfg, reseed, setVD, vd: () => VD, CS, tH, SEA, GEN, chunks, queue, nearestIsland, setWireframe: on => { MAT.wireframe = on; } }
+return { hit, startPos, safeNear, update, prime, setCfg, reseed, setVD, vd: () => VD, CS, tH, SEA, GEN, chunks, queue, nearestIsland, waveDamp, waterClamp, setWireframe: on => { MAT.wireframe = on; } }
 })(ilhasRoot);

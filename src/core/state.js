@@ -51,10 +51,10 @@ export const SETTINGS = Object.assign({
   windStrength: 0.15,
   windDir: 26,
   renderDist: 2,
-  terrainHeight: 4.6,
-  terrainDepth: 9,
-  terrainSpacing: 140,
-  terrainDensity: 85,
+  terrainHeight: 8.5,
+  terrainDepth: 12,
+  terrainSpacing: 220,
+  terrainDensity: 80,
   autoCam: true,
   wireframe: false
 }, savedSettings);

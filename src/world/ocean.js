@@ -52,7 +52,11 @@ setWaveDir(.45);
 export function H(x, z) {
   let y = SEAS.chop * Math.sin(x * .8 + SEAS.wt * 1.9) * Math.cos(z * .7 - SEAS.wt * 1.5);
   for (const w of WV) y += SEAS.amp * w.f * Math.sin(w.k * (w.dx * x + w.dz * z) - Math.sqrt(9.8 * w.k) * SEAS.wt);
-  return y;
+  if (ILHAS && ILHAS.waterClamp) {
+    return ILHAS.waterClamp(x, z, y);
+  }
+  const damp = ILHAS && ILHAS.waveDamp ? ILHAS.waveDamp(x, z) : 1.0;
+  return y * damp;
 }
 
 // Perfil geométrico do casco do navio para evitar invasão de água no convés
@@ -78,6 +82,7 @@ export function updSea(s) {
   for (let i = 0, n = 0; i < NV; i++) {
     const sx = bx[i] * scale, sz = bz[i] * scale;
     const x = sx + ST.px, z = sz + ST.pz;
+    const damp = ILHAS && ILHAS.waveDamp ? ILHAS.waveDamp(x, z) : 1.0;
     let y = SEAS.chop * Math.sin(x * .8 + SEAS.wt * 1.9) * Math.cos(z * .7 - SEAS.wt * 1.5), ox = 0, oz = 0;
     for (const w of WV) {
       const p = w.k * (w.dx * x + w.dz * z) - w.o, A = SEAS.amp * w.f;
@@ -86,6 +91,13 @@ export function updSea(s) {
       ox += k * w.dx;
       oz += k * w.dz;
     }
+    if (ILHAS && ILHAS.waterClamp) {
+      y = ILHAS.waterClamp(x, z, y);
+    } else {
+      y *= damp;
+    }
+    ox *= damp;
+    oz *= damp;
 
     // Depressão suave da água dentro do casco do barco
     const rx = sx + ox;

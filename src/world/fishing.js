@@ -848,7 +848,20 @@ export class FishingSystem {
       const isRunning = f && f.ph === 2;
       let ld = 0;
       if (f) {
-        this.counterControl = isRunning ? (this.hold ? 0 : f.fd ? Math.min(1, Math.max(0, -f.fd * this.mx * 3)) : 1) : 0;
+        // Eficácia do contra-ataque da vara contra a arrancada lateral do peixe
+        let rodCounter = 0;
+        if (f.fd === -1) {
+          // Peixe puxa para a ESQUERDA -> mover vara para a DIREITA (mx > 0)
+          rodCounter = Math.max(0, this.mx * 2.2);
+        } else if (f.fd === 1) {
+          // Peixe puxa para a DIREITA -> mover vara para a ESQUERDA (mx < 0)
+          rodCounter = Math.max(0, -this.mx * 2.2);
+        } else {
+          rodCounter = 0.7;
+        }
+
+        // Contra-ataque é perfeito quando o jogador solta o carretel e inclina a vara na direção oposta
+        this.counterControl = isRunning ? (this.hold ? 0 : Math.min(1.0, rodCounter)) : 0;
 
         if (f.ph === undefined) {
           f.ph = 0;
@@ -876,8 +889,11 @@ export class FishingSystem {
           }
         } else {
           f.tm -= dt;
-          if (this.counterControl > .5) {
-            f.sta = Math.max(0, f.sta - dt * .26 / (1 + .25 * f.t));
+          // Mover a vara para o lado oposto cansa o peixe muito mais rápido
+          if (this.counterControl > .25) {
+            f.sta = Math.max(0, f.sta - dt * (0.60 + 0.40 * this.counterControl) / (1 + .15 * f.t));
+          } else {
+            f.sta = Math.max(0, f.sta - dt * .12 / (1 + .15 * f.t));
           }
           if (f.tm <= 0 || f.sta <= .05) {
             f.ph = 0;
@@ -902,13 +918,12 @@ export class FishingSystem {
           const el = Math.hypot(escX, escZ) || 1;
           escX /= el; escZ /= el;
 
-          const fishSpeed = (3.4 + 2.2 * f.str) * (0.45 + 0.55 * f.sta);
-          if (this.counterControl > 0.5) {
-            // Pescador contra-ataca com a vara na direção oposta, contendo a arrancada
-            this.fishPos.x += escX * fishSpeed * 0.15 * dt;
-            this.fishPos.z += escZ * fishSpeed * 0.15 * dt;
+          const fishSpeed = (3.2 + 2.0 * f.str) * (0.45 + 0.55 * f.sta);
+          if (this.counterControl > 0.3) {
+            // Mover a vara para o lado oposto segura o peixe e não deixa ele nadar para longe
+            // Deslocamento de fuga vai a zero, contendo o peixe
           } else {
-            // Peixe nada livremente na direção de fuga, arrastando a linha
+            // Se não contra-atacar, o peixe nada na direção de fuga
             this.fishPos.x += escX * fishSpeed * dt;
             this.fishPos.z += escZ * fishSpeed * dt;
           }
@@ -917,15 +932,21 @@ export class FishingSystem {
           const escYaw = Math.atan2(-escZ, escX);
           this.fishYaw += wrapA(escYaw - this.fishYaw) * Math.min(1, dt * 8);
 
-          // Tensão puxada pela força do peixe
-          this.heat = Math.max(0, Math.min(3, this.heat + (this.hold ? dt : -dt * 2)));
-          const targetTension = this.hold ? 0.95 : 0.62;
-          this.tension += (targetTension - this.tension) * Math.min(1, dt * (this.hold ? 8 : 5));
+          // Tensão: só aumenta até o limite máximo se o jogador ficar puxando o carretel contra o peixe em fuga
+          if (this.hold) {
+            // Puxar o peixe brigando aumenta a tensão progressivamente
+            const targetTension = 0.95;
+            this.tension += (targetTension - this.tension) * Math.min(1, dt * 2.2);
+          } else {
+            // Soltar o carretel e contra-atacar com a vara mantém a tensão segura e alivia a linha
+            const targetTension = this.counterControl > 0.3 ? 0.42 : 0.55;
+            this.tension += (targetTension - this.tension) * Math.min(1, dt * 3.5);
+          }
         } else {
           // --- REGIME 2: PEIXE NÃO BRIGA (O PESCADOR FAZ A FORÇA) ---
           if (this.hold && this.tension < 0.85) {
-            // O peixe só cede e se aproxima conforme sua estamina vai sendo esgotada no combate
-            const pullSpeed = (3.6 / (1 + 0.35 * Math.min(1.5, sq))) * (0.2 + 0.8 * (1 - f.sta));
+            // O peixe cansado cede e se aproxima
+            const pullSpeed = (3.8 / (1 + 0.35 * Math.min(1.5, sq))) * (0.3 + 0.7 * (1 - f.sta));
             this.fishPos.x -= dirToFishX * pullSpeed * dt;
             this.fishPos.z -= dirToFishZ * pullSpeed * dt;
 
@@ -933,10 +954,10 @@ export class FishingSystem {
             const pullYaw = Math.atan2(dirToFishZ, -dirToFishX);
             this.fishYaw += wrapA(pullYaw - this.fishYaw) * Math.min(1, dt * 6);
 
-            this.tension += (0.45 - this.tension) * Math.min(1, dt * 5);
+            this.tension += (0.42 - this.tension) * Math.min(1, dt * 4.0);
           } else {
             // Linha frouxa, peixe flutua
-            this.tension += (0.02 - this.tension) * Math.min(1, dt * 4);
+            this.tension += (0.02 - this.tension) * Math.min(1, dt * 3.5);
           }
         }
       } else {
@@ -960,13 +981,15 @@ export class FishingSystem {
       const currentDist = Math.hypot(this.fishPos.x - targetBoatX, this.fishPos.z - targetBoatZ);
       this.progress = clamp(1 - (currentDist - 2.2) / Math.max(1, this.castDist - 2.2), 0, 1);
 
-      // Sobrecarga de peso (ld = f.w / CAP[rod]) e quebra de linha se exceder a capacidade da vara sob tensão excessiva
+      // Sobrecarga de peso (ld = f.w / CAP[rod]) e quebra de linha progressiva e justa
       const overload = Math.max(0, ld - 1);
-      const snapThreshold = Math.max(0.65, 0.85 - 0.08 * overload);
-      if (this.tension > snapThreshold) {
-        this.snap += dt * (1 + overload * 1.5);
+      const snapThreshold = Math.max(0.70, 0.85 - 0.08 * overload);
+      if (this.tension > snapThreshold && this.hold) {
+        // A linha só arrebenta se o player insistir em ficar puxando na zona vermelha de tensão
+        this.snap += dt * (0.45 + overload * 0.8);
       } else {
-        this.snap = Math.max(0, this.snap - dt * 1.5);
+        // Soltar o carretel ou contra-atacar recupera a linha rapidamente
+        this.snap = Math.max(0, this.snap - dt * 2.5);
       }
 
       if (this.hold && this.crank && S.r) {
@@ -976,7 +999,7 @@ export class FishingSystem {
       }
 
       const maxReach = S.r ? 48 : (this.castDist + 3.8);
-      if (this.snap > 0.5) {
+      if (this.snap > 1.1) {
         this.lose();
       } else if (currentDist <= 2.3) {
         // O peixe só pode ser içado para fora se não houver peixe OU se a estamina tiver sido esgotada no combate!
@@ -1018,11 +1041,12 @@ export class FishingSystem {
     } else if (this.state === 'catch') {
       cam.getWorldPosition(this.camWorldPos);
       cam.getWorldDirection(this.castDir);
-      // Apresentação frontal destacada na câmera FPV (altura dos olhos, ~1.45m à frente)
+      // Apresentação frontal erguida e centralizada na câmera FPV, com altura ideal para visualização completa do peixe
+      const weightDrop = 0.10 * Math.min(1.8, Math.sqrt(ld));
       this.bp.set(
-        this.camWorldPos.x + this.castDir.x * 1.45 + this.castDir.z * 0.22,
-        this.camWorldPos.y + this.castDir.y * 1.45 - 0.05,
-        this.camWorldPos.z + this.castDir.z * 1.45 - this.castDir.x * 0.22
+        this.camWorldPos.x + this.castDir.x * 1.35 - this.castDir.z * 0.05,
+        this.camWorldPos.y + this.castDir.y * 1.35 + 0.10 - weightDrop,
+        this.camWorldPos.z + this.castDir.z * 1.35 + this.castDir.x * 0.05
       );
     } else {
       this.tip.getWorldPosition(this.V);
@@ -1061,7 +1085,9 @@ export class FishingSystem {
     } else if (this.state === 'cast' && this.castTimer < .3) {
       ta = S.r ? .28 : .24;
     } else if (this.state === 'catch') {
-      tb = .08 + .6 * kb * Math.min(1.3, Math.sqrt(ld));
+      const ldCatch = Math.min(2.0, Math.sqrt(ld));
+      tb = 0.12 + 0.50 * kb * ldCatch;
+      ta = (S.r ? 1.18 : 1.08) - 0.08 * ldCatch;
     }
 
     this.flick = Math.max(0, this.flick - dt * 2.2);
@@ -1093,7 +1119,11 @@ export class FishingSystem {
     this.my += (0 - this.my) * Math.min(1, dt * 1.8);
 
     this.E.set(this.bp.x, this.bp.y + .07, this.bp.z);
-    this.setLine(this.state === 'reel' ? (1 - this.tension) * .8 : (this.state === 'wait' || this.state === 'bite') ? .5 : .1);
+    this.setLine(
+      this.state === 'reel' ? (1 - this.tension) * .8 :
+      this.state === 'catch' ? Math.max(0.01, 0.04 / (1 + 2.5 * ld)) :
+      (this.state === 'wait' || this.state === 'bite') ? .5 : .1
+    );
 
     // PEIXE ARTICULADO PENDURADO NO ANZOL
     if (this.showObj) {
@@ -1105,8 +1135,9 @@ export class FishingSystem {
       const inWater = this.state === 'bite' || this.state === 'reel';
       const isRunning = this.fish && this.fish.ph === 2;
 
-      // Posição vertical estável: na água fica na linha da superfície, fora d'água fica pendurado pelo anzol
-      this.hang.position.y = isCatch ? -0.28 : 0.05;
+      // Posição vertical estável: na água fica na linha da superfície, fora d'água fica pendurado pelo anzol descendo com o peso
+      const weightHangOffset = 0.08 * Math.min(2.0, Math.sqrt(ld));
+      this.hang.position.y = isCatch ? (-0.28 - weightHangOffset) : 0.05;
 
       this.hangVert += ((isCatch ? 1 : 0) - this.hangVert) * Math.min(1, dt * 5);
       this.showObj.scale.setScalar(sc);
