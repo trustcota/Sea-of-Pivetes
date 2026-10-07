@@ -24,6 +24,17 @@ export class BestiaryModal {
 
     this.pages = []; // Estrutura de páginas: [{type: 'intro'}, {type: 'summary'}, {type: 'creature', speciesIdx: N}]
   }
+  
+  formatTitle(str) {
+    if (!str) return '';
+    const connectors = ['de', 'do', 'da', 'dos', 'das', 'e', 'a', 'o'];
+    return str.toLowerCase().split('-').map(part => {
+      return part.split(' ').map((word, i) => {
+        if (i > 0 && connectors.includes(word)) return word;
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      }).join(' ');
+    }).join('-');
+  }
 
   init() {
     this.modalEl = document.getElementById('bestiary-modal');
@@ -199,9 +210,10 @@ export class BestiaryModal {
       const targetPageIndex = this.pages.findIndex(p => p.type === 'creature' && p.speciesIdx === FISH_SPECIES.findIndex(s => s.id === sp.id));
       const introSummaryCount = this.pages.filter(p => p.type === 'intro' || p.type === 'summary').length;
       const displayPageNum = targetPageIndex - introSummaryCount + 1;
+      const formattedName = this.formatTitle(sp.name);
 
       item.innerHTML = `
-        <span class="summary-name">${sp.name}</span>
+        <span class="summary-name">${formattedName}</span>
         <span class="summary-dots"></span>
         <span class="summary-page">${displayPageNum}</span>
       `;
@@ -224,8 +236,9 @@ export class BestiaryModal {
     const elSize = document.getElementById('bestiary-size');
     const elHab = document.getElementById('bestiary-hab');
     const elDesc = document.getElementById('bestiary-desc');
+    const elPageNum = document.getElementById('bestiary-page-num');
 
-    if (elName) elName.textContent = sp.name;
+    if (elName) elName.textContent = this.formatTitle(sp.name);
     if (elSci) elSci.textContent = sp.scientificName;
     if (elCat) elCat.textContent = `Categoria: ${sp.category}`;
     if (elSize) elSize.textContent = `Porte: ${sp.sizeRange}`;
