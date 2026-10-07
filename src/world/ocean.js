@@ -48,6 +48,9 @@ setWaveDir(.45);
 export function H(x, z) {
   let y = SEAS.chop * Math.sin(x * .8 + SEAS.wt * 1.9) * Math.cos(z * .7 - SEAS.wt * 1.5);
   for (const w of WV) y += SEAS.amp * w.f * Math.sin(w.k * (w.dx * x + w.dz * z) - Math.sqrt(9.8 * w.k) * SEAS.wt);
+  if (ILHAS && ILHAS.shoreClamp) {
+    return ILHAS.shoreClamp(x, z, y);
+  }
   return y;
 }
 
@@ -92,6 +95,15 @@ export function updSea(s) {
       const k = SEAS.st * w.st * A * Math.cos(p);
       ox += k * w.dx;
       oz += k * w.dz;
+    }
+    if (ILHAS && ILHAS.shoreClamp) {
+      const clampedY = ILHAS.shoreClamp(x, z, y);
+      if (clampedY !== y) {
+        const factor = y !== 0 ? Math.max(0.0, Math.min(1.0, clampedY / y)) : 0.0;
+        ox *= factor;
+        oz *= factor;
+        y = clampedY;
+      }
     }
 
     // Depressão suave da água dentro do casco do barco

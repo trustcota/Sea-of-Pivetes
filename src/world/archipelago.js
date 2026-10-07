@@ -218,6 +218,39 @@ function pump() { const t0 = performance.now(), lim = bud > 0 ? 24 : 7; bud--; w
 function tH(x, z) { const S = CS / N, i = Math.floor(x / S), j = Math.floor(z / S), u = x / S - i, v = z / S - j, a = field(i * S, j * S).h, b = field((i + 1) * S, j * S).h, c = field(i * S, (j + 1) * S).h, d = field((i + 1) * S, (j + 1) * S).h; return u + v <= 1 ? a + u * (b - a) + v * (c - a) : d + (1 - u) * (c - d) + (1 - v) * (b - d) }
 function nearestIsland(x, z) { const ix = Math.floor(x / IC), iz = Math.floor(z / IC); let b = null, bd = 1e9; for (let i = ix - 2; i <= ix + 2; i++) for (let j = iz - 2; j <= iz + 2; j++) { const c = cell(i, j); if (c) { const d = Math.hypot(c.x - x, c.z - z); if (d < bd) { bd = d; b = c } } } return b }
 
+/* Aproximação analítica ultrarrápida da elevação da ilha para amortecimento e contenção de ondas */
+function shoreClamp(x, z, rawY) {
+  const ix = Math.floor(x / IC), iz = Math.floor(z / IC);
+  let nearC = null, minDist = 1e9;
+  for (let i = ix - 1; i <= ix + 1; i++) {
+    for (let j = iz - 1; j <= iz + 1; j++) {
+      const c = cell(i, j);
+      if (!c) continue;
+      const dx = x - c.x, dz = z - c.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < minDist) {
+        minDist = dist;
+        nearC = c;
+      }
+    }
+  }
+  if (!nearC || minDist > nearC.r + 20) {
+    return rawY;
+  }
+  const normDist = minDist / nearC.r;
+  const estH = GEN.height * (1.0 - normDist) * nearC.s;
+  if (estH > -2.2) {
+    const depth = Math.max(0.0, -estH);
+    const damp = Math.max(0.0, Math.min(1.0, depth / 2.2));
+    let y = rawY * damp;
+    if (estH >= -0.1) {
+      y = Math.min(y, -0.35 - estH * 0.5);
+    }
+    return y;
+  }
+  return rawY;
+}
+
 window.MAP = { SEA, get floor() { return SEA - GEN.depth }, cfg: GEN, height: tH, depth: (x, z) => SEA - tH(x, z), isLand: (x, z) => tH(x, z) >= SEA, island: nearestIsland, biome: (x, z) => BI[field(x, z).b].n, get seed() { return WS } };
 
 const DRAFT = 1.8, HP = [[0, 5], [0, -5], [0, 0], [0, 2.5], [0, -2.5], [-2.2, 0], [2.2, 0]];
@@ -230,7 +263,6 @@ function startPos() { let c = null; for (let k = 0; k < 4 && !c; k++) for (let i
  for (let d = c.r * 1.35 + 50; d < c.r * 1.35 + 300; d += 12) for (let t = 0; t < 16; t++) { const a = -1.5708 + (t % 2 ? 1 : -1) * Math.ceil(t / 2) * .4, x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d; let ok = true; for (let u = 0; u < 8 && ok; u++) ok = deep(x + Math.cos(u * .785) * 14, z + Math.sin(u * .785) * 14, DRAFT * 2.5); if (ok) return { x, z } }
  return { x: c.x + c.r * 3, z: c.z } }
 function update(px, pz, dt) { scene.position.set(-px, -SEA, -pz); ctl.target.set(px, 0, pz); plan(); pump(); const tg = ctl.target;
- const now = performance.now() * .001; ilhasRoot.rotation.z = Math.sin(now * 1.1) * .003; ilhasRoot.rotation.x = Math.cos(now * .9) * .003;
  chunks.forEach(c => { c.age += dt; if (c.age < 1.2) { const e = Math.max(1 - Math.pow(1 - Math.min(c.age / .9, 1), 3), .001); c.ms.forEach(m => { m.scale.y = e; m.position.y = SEA * (1 - e) }) } if (c.small) c.small.visible = Math.hypot((c.cx + .5) * CS - tg.x, (c.cz + .5) * CS - tg.z) < CS * 1.7 }) }
 function prime() { bud = 40; fcx = 1e9; plan(); for (let i = 0; i < 40 && queue.length; i++) pump() }
 function safeNear(px, pz, hd) { for (let r = 0; r < 260; r += 6) for (let t = 0; t < (r ? 16 : 1); t++) { const a = t * .3927, x = px + Math.cos(a) * r, z = pz + Math.sin(a) * r; if (!hit(x, z, hd) && deep(x, z, DRAFT * 1.6)) return { x, z } } return startPos() }
@@ -239,5 +271,5 @@ function regen() { cells.clear(); chunks.forEach(drop); chunks.clear(); queue.le
 function setCfg(k, v) { GEN[k] = v; calc(); regen() }
 function reseed() { WS = (Math.random() * 1e9 | 0) || 1; regen() }
 function setVD(v) { VD = v; plan.f = 1; bud = 50; }
-return { hit, startPos, safeNear, update, prime, setCfg, reseed, setVD, vd: () => VD, CS, tH, SEA, GEN, chunks, queue, nearestIsland, setWireframe: on => { MAT.wireframe = on; } }
+return { hit, startPos, safeNear, update, prime, setCfg, reseed, setVD, vd: () => VD, CS, tH, SEA, GEN, chunks, queue, nearestIsland, shoreClamp, setWireframe: on => { MAT.wireframe = on; } }
 })(ilhasRoot);
