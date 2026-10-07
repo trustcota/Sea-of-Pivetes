@@ -15,7 +15,7 @@ export const SH = (() => {
   };
   const wood = M('#6d4325'), dark = M('#3a2413'), gold = M('#dcab3b', { roughness: .6 }), iron = M('#2b2e35', { roughness: .6 }),
     rp = M('#cdb68a'), sailM = M('#f0e4c6'), blk = M('#17171b'), wht = M('#f1ece0'), vc = M('#ffffff', { vertexColors: true }),
-    glow = M('#ffd36a', { emissive: '#ffb43a', emissiveIntensity: .9 });
+    winMat = M('#251b14', { roughness: .5 }), glow = M('#ffd36a', { emissive: '#ffb43a', emissiveIntensity: .9 });
   const add = (g, m, x = 0, y = 0, z = 0, p = ship) => { const o = new T.Mesh(g, m); o.position.set(x, y, z); o.castShadow = true; o.receiveShadow = true; p.add(o); return o };
   const box = (w, h, d, m, x, y, z, p) => add(new T.BoxGeometry(w, h, d), m, x, y, z, p);
   const cyl = (a, b, h, s, m, x, y, z, p) => add(new T.CylinderGeometry(a, b, h, s), m, x, y, z, p);
@@ -79,7 +79,7 @@ export const SH = (() => {
   box(1.2, .12, 1.2, dark, 0, .41, -.9); box(1.2, .04, .12, wood, 0, .49, -.9); box(.12, .04, 1.2, wood, 0, .49, -.9);
 
   /* Popa: janelas, frisos, leme, lanternas e timão */
-  for (const x of [-.95, 0, .95]) box(.5, .5, .1, glow, x, 1.6, -6.02);
+  for (const x of [-.95, 0, .95]) box(.5, .5, .1, winMat, x, 1.6, -6.02);
   box(2.6, .12, .14, gold, 0, 2.2, -6.04); box(2.2, .12, .14, gold, 0, 1.1, -6.04);
   box(.14, 1.7, .55, dark, 0, -.35, -6.3);
   const lanterns = [];
@@ -111,7 +111,7 @@ export const SH = (() => {
     lanterns.push({
       light: l,
       mat: lanternGlow,
-      on: true,
+      on: false,
       index: idx,
       pos: new T.Vector3(lx, ly, lz)
     });
@@ -132,8 +132,8 @@ export const SH = (() => {
     // Lanternas Laterais (atrás das escadas, assentadas diretamente sobre a amurada lateral em Y = 0.95)
     addLantern(s * 1.82, 1.11, 1.2, s, 'Lateral (' + sideName + ')');
   }
-  const wh = new T.Group(), whm = []; wh.position.set(0, 2.15, -4.6); ship.add(wh);
-  box(.36, 1, .36, wood, 0, 1.7, -4.6);
+  const wh = new T.Group(), whm = []; wh.position.set(.75, 2.15, -4.0); ship.add(wh);
+  box(.36, 1, .36, wood, .75, 1.7, -4.0);
   whm.push(own(add(new T.TorusGeometry(.5, .06, 4, 12), wood, 0, 0, 0, wh)));
   const hub = own(cyl(.12, .12, .2, 8, gold, 0, 0, 0, wh)); hub.rotation.x = Math.PI / 2; whm.push(hub);
   for (let k = 0; k < 4; k++) { const sp = own(box(.07, 1.4, .07, wood, 0, 0, 0, wh)); sp.rotation.z = k * Math.PI / 4; whm.push(sp) }
@@ -199,7 +199,7 @@ export const SH = (() => {
     
     const LF = [dr(.022), dr(.022)], BR = [own(dr(.026, rR)), own(dr(.026, rR))], CL = [own(dr(.022, gR)), own(dr(.022, gR))], SS = [dr(.03), dr(.03)], BU = own(dr(.022, gR)), HY = own(dr(.02, gR));
     const so = {
-      name, d: 1, t: 1, upd(tt, wd, fs) {
+      name, d: 0, t: 0, upd(tt, wd, fs) {
         const d = this.d, a = rg.a, c = Math.cos(a), s2 = Math.sin(a), W2 = (x, y, zl) => V(x * c + zl * s2, y, -x * s2 + zl * c + z);
         const hh = Math.max(.001, h * d), bl = (wd < 0 ? -1 : 1) * (.12 + .88 * Math.abs(wd)) * .1 * w * Math.pow(d, .6), fa = (.02 + .1 * fs) * Math.min(1, d * 1.5), ph = z * 1.7 + y, on = d > .015;
         m.visible = on; [BU, ...CL, ...SS].forEach(o => o.visible = on);
@@ -238,7 +238,7 @@ export const SH = (() => {
     const SS = [1, -1].map(() => own(dr(.026, rR))), HY = own(dr(.02, gR)), BM = o.boom ? dr(.065, wood) : null;
     box(.14, .14, .14, iron, ...o.bk); box(.18, .1, .12, iron, ...o.ck); const hs = own(dr(.02, gR)); setR(hs, V(...o.bk), V(...o.ck));
     const so = {
-      name, d: 1, t: 1, upd(tt, wd, fs) {
+      name, d: 0, t: 0, upd(tt, wd, fs) {
         const d = this.d, bl = (wd < 0 ? -1 : 1) * (.12 + .88 * Math.abs(wd)) * .5 * Math.pow(d, .6), fa = (.03 + .14 * fs) * Math.min(1, d * 1.5), cs = Math.cos(rg.a), sn = Math.sin(rg.a), on = d > .015;
         const dx = cF.x - a.x, dz = cF.z - a.z; cb.set(a.x + dx * cs + dz * sn, cF.y, a.z - dx * sn + dz * cs);
         h2.copy(a).lerp(hF, d); c2.copy(a).lerp(cb, .4 + .6 * d); m.visible = on; SS.forEach(r => r.visible = on); HY.visible = on;
@@ -254,7 +254,15 @@ export const SH = (() => {
   const rM = rig('Principal', .2, 60, 1), rZ = rig('Mezena', -3.3, 75, 0), rJ = rig('Bujarrona', 0, 65, 0);
   tr('Bujarrona', rJ, [0, 3.1, 9], [0, 7.5, 3.75], [0, 3.2, 5.9], 0, { bk: [0, 7.68, 3.55], ck: [.45, .47, 2.8], az: 4.7 });
   sq('Grande', rM, 5.1, 6.2, 2.9, 10.3, .35, 0); sq('Gávea', rM, 7.9, 4.8, 2.3, 10.3, .35, 1); sq('Joanete', rM, 9.6, 3.2, 1.2, 10.3, .35, 2);
-  tr('Mezena', rZ, [0, 3.4, -3.45], [0, 7.2, -3.45], [0, 3.4, -5.2], 1.3, { bk: [0, 7.6, -3.3], ck: [.42, 1.32, -3.75], az: -5, boom: 1 });
+  // Suporte de madeira do mastro da mezena (Mesa de malaguetas e amarração das cordas)
+  box(0.95, 0.06, 0.20, dark, 0, 2.02, -3.52);
+  box(0.08, 0.82, 0.08, wood, -0.38, 1.61, -3.52);
+  box(0.08, 0.82, 0.08, wood, 0.38, 1.61, -3.52);
+  for (const px of [-.28, 0, .28]) box(.04, .16, .04, iron, px, 2.11, -3.52);
+  box(.04, .04, .06, iron, .42, 2.02, -3.50);
+  add(new T.TorusGeometry(.04, .012, 4, 8), gold, .42, 2.02, -3.52).rotation.x = Math.PI / 2;
+
+  tr('Mezena', rZ, [0, 3.4, -3.45], [0, 7.2, -3.45], [0, 3.4, -5.2], 1.3, { bk: [0, 7.6, -3.3], ck: [.42, 2.02, -3.52], az: -5, boom: 1 });
   rope([0, 1.6, 5.2], [0, 3.1, 9.3], .13, wood, 6);
   add(new T.IcosahedronGeometry(.22, 0), gold, 0, 2.1, 6.02);
   cyl(.5, .38, .5, 8, wood, 0, 10.1, .2); cyl(.58, .58, .07, 8, dark, 0, 10.38, .2);
@@ -382,7 +390,7 @@ export const SH = (() => {
     if (ax > .45 && ax < 1.35 && z < -1.35) return .35 + .28 * (Math.min(2, Math.floor((-1.35 - z) / .3)) + 1);
     if (ax < .6 && Math.abs(z + .9) < .6) return .49; return .35
   };
-  const ob = [[0, 2.2, .34], [0, .2, .36], [0, -3.3, .29], [0, -4.6, .55], [-1.2, -5.7, .22], [1.2, -5.7, .22], [1.25, 2.1, .3], [-1.25, 2.1, .3]];
+  const ob = [[0, 2.2, .34], [0, .2, .36], [0, -3.3, .29], [.75, -4.0, .55], [-1.2, -5.7, .22], [1.2, -5.7, .22], [1.25, 2.1, .3], [-1.25, 2.1, .3]];
   const walk = {
     g: gy, ok: (x, z, px, pz) => {
       if (z < -5.7 || z > 4.3) return 0; const y = gy(x, z); if (y - gy(px, pz) > .45 || Math.abs(x) > edge(z, y) - .22) return 0;
@@ -396,7 +404,7 @@ export const SH = (() => {
   for (const k of [1, -1]) { const a = box(.75, .12, .12, iron, k * .3, -.62, 0, anc); a.rotation.z = -k * .6; box(.2, .2, .14, iron, k * .62, -.38, 0, anc) }
   const arope = cyl(.04, .04, 1, 5, rp, .88, 1, 3.9); arope.frustumCulled = false;
   inter.push({ t: 'anchor', pos: V(0, .35, 2.2), label: 'Âncora (cabrestante)' });
-  inter.push({ t: 'helm', pos: V(0, 2.15, -4.6), label: 'Leme' });
+  inter.push({ t: 'helm', pos: V(.75, 2.15, -4.0), label: 'Leme' });
   return { ship, fl, mats, sails, rigs, walk, inter, wh, helm: HM, anc, arope, cap, lad: LD, ladders, whg: whm.map(o => G(o, 'h')), lanterns }
 })();
 

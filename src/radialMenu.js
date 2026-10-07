@@ -9,6 +9,7 @@ let setAllFn = null;
 let activeMenu = 'main';
 let isOpen = false;
 let selectedIndex = -1;
+let selectedSubIndex = -1;
 let toastTimeout = null;
 
 let rjoy = { id: -1, x0: 0, y0: 0, dx: 0, dy: 0 };
@@ -55,6 +56,53 @@ export function showOrderToast(msg) {
   }, 2500);
 }
 
+export function setSailHoist(group, hoistVal) {
+  if (!SH || !SH.sails) return;
+  SH.sails.forEach(so => {
+    if (group === 'all') {
+      so.t = hoistVal;
+    } else if (group === 'front' && so.name === 'Bujarrona') {
+      so.t = hoistVal;
+    } else if (group === 'main' && (so.name === 'Grande' || so.name === 'Gávea' || so.name === 'Joanete')) {
+      so.t = hoistVal;
+    } else if (group === 'rear' && so.name === 'Mezena') {
+      so.t = hoistVal;
+    }
+  });
+}
+
+export function setRigRotation(group, dir) {
+  if (!SH || !SH.rigs) return;
+  SH.rigs.forEach(g => {
+    let targetAngle = 0;
+    if (dir === 'port') targetAngle = -g.lim;
+    else if (dir === 'starboard') targetAngle = g.lim;
+    else targetAngle = 0;
+
+    if (group === 'all') {
+      g.t = targetAngle;
+    } else if (group === 'front' && g.name === 'Bujarrona') {
+      g.t = targetAngle;
+    } else if (group === 'main' && g.name === 'Principal') {
+      g.t = targetAngle;
+    } else if (group === 'rear' && g.name === 'Mezena') {
+      g.t = targetAngle;
+    }
+  });
+}
+
+const SAIL_SUB_TABS = [
+  { id: 'front', label: 'Proa', fullLabel: 'Vela da Frente (Bujarrona)', icon: '⛵' },
+  { id: 'main', label: 'Mastro', fullLabel: 'Mastro Principal', icon: '⛵' },
+  { id: 'rear', label: 'Popa', fullLabel: 'Vela de Trás (Mezena)', icon: '⛵' }
+];
+
+const RIG_SUB_TABS = [
+  { id: 'front', label: 'Proa', fullLabel: 'Verga da Proa (Bujarrona)', icon: '🔄' },
+  { id: 'main', label: 'Mastro', fullLabel: 'Vergas do Mastro Principal', icon: '🔄' },
+  { id: 'rear', label: 'Popa', fullLabel: 'Verga da Popa (Mezena)', icon: '🔄' }
+];
+
 const MENUS = {
   main: {
     title: '📜 ORDENS DO CAPITÃO',
@@ -74,34 +122,31 @@ const MENUS = {
         id: 'sails_up',
         label: 'Içar 100%',
         icon: '⛵',
-        desc: 'Abre 100% de todas as velas para velocidade máxima',
-        action: () => {
-          if (setAllFn) setAllFn(1);
-          showOrderToast('📜 Capitão ordenou: Içar todas as velas (100%)!');
-          closeRadialMenu();
-        }
+        desc: 'Abre 100% das velas para velocidade máxima',
+        subType: 'sail_hoist',
+        hoistVal: 1,
+        actionName: 'Içar 100%',
+        subTabs: SAIL_SUB_TABS
       },
       {
         id: 'sails_half',
         label: 'Meia Vela',
         icon: '⛵',
         desc: 'Abre 50% das velas para navegação moderada',
-        action: () => {
-          if (setAllFn) setAllFn(0.5);
-          showOrderToast('📜 Capitão ordenou: Meia vela (50%)!');
-          closeRadialMenu();
-        }
+        subType: 'sail_hoist',
+        hoistVal: 0.5,
+        actionName: 'Meia Vela (50%)',
+        subTabs: SAIL_SUB_TABS
       },
       {
         id: 'sails_down',
         label: 'Arriar Velas',
         icon: '⛵',
         desc: 'Recolhe todas as velas (0% velocidade)',
-        action: () => {
-          if (setAllFn) setAllFn(0);
-          showOrderToast('📜 Capitão ordenou: Arriar todas as velas!');
-          closeRadialMenu();
-        }
+        subType: 'sail_hoist',
+        hoistVal: 0,
+        actionName: 'Arriar Velas',
+        subTabs: SAIL_SUB_TABS
       },
       {
         id: 'toggle_lanterns',
@@ -122,33 +167,30 @@ const MENUS = {
         label: 'Vergas (Esq)',
         icon: '⬅',
         desc: 'Gira vergas a Bombordo (Esquerda)',
-        action: () => {
-          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = -g.lim);
-          showOrderToast('📜 Capitão ordenou: Vergas a Bombordo!');
-          closeRadialMenu();
-        }
+        subType: 'rig_rot',
+        dir: 'port',
+        actionName: 'Vergas a Bombordo',
+        subTabs: RIG_SUB_TABS
       },
       {
         id: 'rigs_center',
         label: 'Vergas (Centro)',
         icon: '🎯',
         desc: 'Centraliza todas as vergas a 0°',
-        action: () => {
-          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = 0);
-          showOrderToast('📜 Capitão ordenou: Centralizar vergas!');
-          closeRadialMenu();
-        }
+        subType: 'rig_rot',
+        dir: 'center',
+        actionName: 'Centralizar Vergas',
+        subTabs: RIG_SUB_TABS
       },
       {
         id: 'rigs_star',
         label: 'Vergas (Dir)',
         icon: '➔',
         desc: 'Gira vergas a Estibordo (Direita)',
-        action: () => {
-          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = g.lim);
-          showOrderToast('📜 Capitão ordenou: Vergas a Estibordo!');
-          closeRadialMenu();
-        }
+        subType: 'rig_rot',
+        dir: 'starboard',
+        actionName: 'Vergas a Estibordo',
+        subTabs: RIG_SUB_TABS
       }
     ]
   },
@@ -200,34 +242,31 @@ const MENUS = {
         id: 's100',
         label: 'Içar 100%',
         icon: '⛵',
-        desc: 'Abre 100% de todas as velas',
-        action: () => {
-          if (setAllFn) setAllFn(1);
-          showOrderToast('📜 Capitão ordenou: Içar todas as velas (100%)');
-          closeRadialMenu();
-        }
+        desc: 'Abre 100% das velas',
+        subType: 'sail_hoist',
+        hoistVal: 1,
+        actionName: 'Içar 100%',
+        subTabs: SAIL_SUB_TABS
       },
       {
         id: 's50',
         label: 'Meia Vela',
         icon: '⛵',
-        desc: 'Abre 50% de todas as velas',
-        action: () => {
-          if (setAllFn) setAllFn(0.5);
-          showOrderToast('📜 Capitão ordenou: Meia vela (50%)');
-          closeRadialMenu();
-        }
+        desc: 'Abre 50% das velas',
+        subType: 'sail_hoist',
+        hoistVal: 0.5,
+        actionName: 'Meia Vela (50%)',
+        subTabs: SAIL_SUB_TABS
       },
       {
         id: 's0',
         label: 'Arriar Velas',
         icon: '⛵',
-        desc: 'Recolhe 100% de todas as velas',
-        action: () => {
-          if (setAllFn) setAllFn(0);
-          showOrderToast('📜 Capitão ordenou: Arriar todas as velas');
-          closeRadialMenu();
-        }
+        desc: 'Recolhe 100% das velas',
+        subType: 'sail_hoist',
+        hoistVal: 0,
+        actionName: 'Arriar Velas',
+        subTabs: SAIL_SUB_TABS
       },
       { id: 'rigs', label: 'Girar Vergas', icon: '🔄', desc: 'Orientação do ângulo do vento', target: 'rigs' },
       { id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar ao menu anterior', target: 'submenus' }
@@ -242,33 +281,30 @@ const MENUS = {
         label: 'Girar Bombordo',
         icon: '⬅',
         desc: 'Gira vergas totalmente para a esquerda',
-        action: () => {
-          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = -g.lim);
-          showOrderToast('📜 Capitão ordenou: Girar vergas a Bombordo (Esquerda)!');
-          closeRadialMenu();
-        }
+        subType: 'rig_rot',
+        dir: 'port',
+        actionName: 'Girar a Bombordo',
+        subTabs: RIG_SUB_TABS
       },
       {
         id: 'rot_center',
         label: 'Centralizar',
         icon: '🎯',
         desc: 'Alinha vergas retas a 0°',
-        action: () => {
-          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = 0);
-          showOrderToast('📜 Capitão ordenou: Centralizar vergas das velas');
-          closeRadialMenu();
-        }
+        subType: 'rig_rot',
+        dir: 'center',
+        actionName: 'Centralizar Vergas',
+        subTabs: RIG_SUB_TABS
       },
       {
         id: 'rot_starboard',
         label: 'Girar Estibordo',
         icon: '➔',
         desc: 'Gira vergas totalmente para a direita',
-        action: () => {
-          if (SH && SH.rigs) SH.rigs.forEach(g => g.t = g.lim);
-          showOrderToast('📜 Capitão ordenou: Girar vergas a Estibordo (Direita)!');
-          closeRadialMenu();
-        }
+        subType: 'rig_rot',
+        dir: 'starboard',
+        actionName: 'Girar a Estibordo',
+        subTabs: RIG_SUB_TABS
       },
       { id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar ao menu anterior', target: 'sails' }
     ]
@@ -382,7 +418,6 @@ const MENUS = {
             icon: fish.icon,
             desc: `${(fish.weight < 1 ? (fish.weight * 1000).toFixed(0) + ' g' : fish.weight.toFixed(1) + ' kg')}`,
             action: () => {
-              // Ação ao clicar no peixe: Abrir menu de contexto (Descartar por enquanto)
               const discard = confirm(`Deseja descartar este ${fish.name}?`);
               if (discard) {
                 GAME.backpack.splice(i, 1);
@@ -415,6 +450,7 @@ export function openRadialMenu(menuKey = 'main') {
   isOpen = true;
   activeMenu = menuKey;
   selectedIndex = -1;
+  selectedSubIndex = -1;
   rjoy.id = -1;
   hideRightJoycon();
   if (document.pointerLockElement) {
@@ -430,6 +466,7 @@ export function openRadialMenu(menuKey = 'main') {
 export function closeRadialMenu() {
   isOpen = false;
   selectedIndex = -1;
+  selectedSubIndex = -1;
   rjoy.id = -1;
   hideRightJoycon();
   const overlay = document.getElementById('radial-orders-overlay');
@@ -437,7 +474,6 @@ export function closeRadialMenu() {
     overlay.style.display = 'none';
   }
   
-  // Se o Bestiário estiver aberto, não recapturamos o mouse
   const bestiary = document.getElementById('bestiary-modal');
   if (bestiary && bestiary.style.display === 'flex') return;
 
@@ -485,7 +521,7 @@ function renderRadialMenu() {
   if (!total) return;
 
   const rIn = 56;
-  const rOut = 140;
+  const rOut = 138;
   const step = (2 * Math.PI) / total;
   const gap = total > 4 ? 0.03 : 0.02;
 
@@ -499,11 +535,19 @@ function renderRadialMenu() {
 
     const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     pathEl.setAttribute('d', pathD);
-    pathEl.setAttribute('class', 'gta-slice-path' + (item.disabled ? ' disabled' : '') + (isActive ? ' active' : ''));
+    pathEl.setAttribute('class', 'gta-slice-path' + (item.disabled ? ' disabled' : '') + (isActive && selectedSubIndex === -1 ? ' active' : ''));
 
     pathEl.onclick = (e) => {
       e.stopPropagation();
-      executeItem(item);
+      executeItem(item, -1);
+    };
+
+    pathEl.onpointerenter = () => {
+      if (selectedIndex !== index || selectedSubIndex !== -1) {
+        selectedIndex = index;
+        selectedSubIndex = -1;
+        renderRadialMenu();
+      }
     };
 
     slicesGroup.appendChild(pathEl);
@@ -533,12 +577,70 @@ function renderRadialMenu() {
     labelText.setAttribute('font-size', '9');
     labelText.setAttribute('font-weight', 'bold');
     labelText.setAttribute('class', 'gta-slice-text-label');
-    labelText.setAttribute('fill', item.disabled ? 'rgba(255,255,255,0.4)' : (isActive ? '#110b06' : '#fff9ed'));
+    labelText.setAttribute('fill', item.disabled ? 'rgba(255,255,255,0.4)' : (isActive && selectedSubIndex === -1 ? '#110b06' : '#fff9ed'));
     labelText.textContent = item.label;
 
     g.appendChild(iconText);
     g.appendChild(labelText);
     slicesGroup.appendChild(g);
+
+    // Renderiza as 3 sub-abas se o item estiver selecionado
+    if (isActive && item.subTabs && item.subTabs.length) {
+      const subRIn = 143;
+      const subROut = 185;
+      const subCount = item.subTabs.length;
+      const sliceArc = a2 - a1;
+      const subStep = sliceArc / subCount;
+      const subGap = 0.01;
+
+      item.subTabs.forEach((sub, sIdx) => {
+        const subA1 = a1 + (sIdx * subStep) + subGap;
+        const subA2 = a1 + ((sIdx + 1) * subStep) - subGap;
+        const subPathD = sectorPath(subRIn, subROut, subA1, subA2);
+        const isSubActive = (sIdx === selectedSubIndex);
+
+        const subPathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        subPathEl.setAttribute('d', subPathD);
+        subPathEl.setAttribute('class', 'gta-subslice-path' + (isSubActive ? ' active' : ''));
+
+        subPathEl.onclick = (e) => {
+          e.stopPropagation();
+          executeItem(item, sIdx);
+        };
+
+        subPathEl.onpointerenter = () => {
+          if (selectedIndex !== index || selectedSubIndex !== sIdx) {
+            selectedIndex = index;
+            selectedSubIndex = sIdx;
+            renderRadialMenu();
+          }
+        };
+
+        slicesGroup.appendChild(subPathEl);
+
+        const subCenterA = (subA1 + subA2) / 2;
+        const subMidR = (subRIn + subROut) / 2;
+        const stx = Math.cos(subCenterA) * subMidR;
+        const sty = Math.sin(subCenterA) * subMidR;
+
+        const subG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        subG.style.pointerEvents = 'none';
+
+        const subLabelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        subLabelText.setAttribute('x', stx.toFixed(1));
+        subLabelText.setAttribute('y', sty.toFixed(1));
+        subLabelText.setAttribute('text-anchor', 'middle');
+        subLabelText.setAttribute('dominant-baseline', 'middle');
+        subLabelText.setAttribute('font-size', '10');
+        subLabelText.setAttribute('font-weight', 'bold');
+        subLabelText.setAttribute('class', 'gta-slice-text-label');
+        subLabelText.setAttribute('fill', isSubActive ? '#000000' : '#00d9ff');
+        subLabelText.textContent = sub.label;
+
+        subG.appendChild(subLabelText);
+        slicesGroup.appendChild(subG);
+      });
+    }
   });
 
   // Hub Central
@@ -548,9 +650,16 @@ function renderRadialMenu() {
 
   if (selectedIndex >= 0 && items[selectedIndex]) {
     const cur = items[selectedIndex];
-    if (hubIcon) hubIcon.textContent = cur.icon || '⚓';
-    if (hubText) hubText.textContent = cur.label || 'ORDEM';
-    if (hubDesc) hubDesc.textContent = cur.desc || '';
+    if (selectedSubIndex >= 0 && cur.subTabs && cur.subTabs[selectedSubIndex]) {
+      const sub = cur.subTabs[selectedSubIndex];
+      if (hubIcon) hubIcon.textContent = sub.icon || cur.icon || '⛵';
+      if (hubText) hubText.textContent = `${cur.label} · ${sub.label}`;
+      if (hubDesc) hubDesc.textContent = `${cur.actionName || cur.label} (${sub.fullLabel})`;
+    } else {
+      if (hubIcon) hubIcon.textContent = cur.icon || '⚓';
+      if (hubText) hubText.textContent = cur.label || 'ORDEM';
+      if (hubDesc) hubDesc.textContent = cur.subTabs ? `${cur.desc} · (Puxe para fora para vela específica)` : (cur.desc || '');
+    }
   } else {
     const parentMenu = menu.parent;
     if (hubIcon) hubIcon.textContent = parentMenu ? '↩' : '✕';
@@ -559,17 +668,43 @@ function renderRadialMenu() {
   }
 }
 
-function executeItem(item) {
+function executeItem(item, subIndex = -1) {
   if (item.target) {
     activeMenu = item.target;
     selectedIndex = -1;
+    selectedSubIndex = -1;
     renderRadialMenu();
-  } else if (item.action) {
+    return;
+  }
+
+  if (item.subType === 'sail_hoist') {
+    const sub = subIndex >= 0 && item.subTabs ? item.subTabs[subIndex] : null;
+    const group = sub ? sub.id : 'all';
+    setSailHoist(group, item.hoistVal);
+    if (group === 'all' && setAllFn) setAllFn(item.hoistVal);
+
+    const groupText = group === 'all' ? 'em TODAS as velas' : `na ${sub.fullLabel}`;
+    showOrderToast(`📜 Capitão ordenou: ${item.actionName} ${groupText}!`);
+    closeRadialMenu();
+    return;
+  }
+
+  if (item.subType === 'rig_rot') {
+    const sub = subIndex >= 0 && item.subTabs ? item.subTabs[subIndex] : null;
+    const group = sub ? sub.id : 'all';
+    setRigRotation(group, item.dir);
+
+    const groupText = group === 'all' ? 'em TODAS as vergas' : `na ${sub.fullLabel}`;
+    showOrderToast(`📜 Capitão ordenou: ${item.actionName} ${groupText}!`);
+    closeRadialMenu();
+    return;
+  }
+
+  if (item.action) {
     item.action();
   }
 }
 
-// Seleção direcional analógica por vetor (dx, dy)
 export function updateRadialSelectionByDirection(dx, dy) {
   if (!isOpen) return;
   const menu = MENUS[activeMenu] || MENUS.main;
@@ -579,10 +714,10 @@ export function updateRadialSelectionByDirection(dx, dy) {
 
   const dist = Math.hypot(dx, dy);
 
-  // Insensível se o deslocamento for insignificante
   if (dist < 0.12 && Math.abs(dx) < 8 && Math.abs(dy) < 8) {
-    if (selectedIndex !== -1) {
+    if (selectedIndex !== -1 || selectedSubIndex !== -1) {
       selectedIndex = -1;
+      selectedSubIndex = -1;
       renderRadialMenu();
     }
     return;
@@ -592,8 +727,9 @@ export function updateRadialSelectionByDirection(dx, dy) {
   let bestIndex = 0;
   let minDiff = Infinity;
 
+  const step = (2 * Math.PI) / total;
   items.forEach((_, i) => {
-    const itemAngle = (i * (2 * Math.PI / total)) - (Math.PI / 2);
+    const itemAngle = (i * step) - (Math.PI / 2);
     const diff = Math.abs(wrapAngle(targetAngle - itemAngle));
     if (diff < minDiff) {
       minDiff = diff;
@@ -601,8 +737,25 @@ export function updateRadialSelectionByDirection(dx, dy) {
     }
   });
 
-  if (bestIndex !== selectedIndex) {
+  let bestSubIndex = -1;
+  const activeItem = items[bestIndex];
+  if (activeItem && activeItem.subTabs && activeItem.subTabs.length) {
+    const isOuter = dist > 0.62 || dist > 135;
+    if (isOuter) {
+      const centerAngle = (bestIndex * step) - (Math.PI / 2);
+      const a1 = centerAngle - (step / 2);
+      let rel = wrapAngle(targetAngle - a1);
+      if (rel < 0) rel += 2 * Math.PI;
+      const subStep = step / activeItem.subTabs.length;
+      bestSubIndex = Math.floor(rel / subStep);
+      if (bestSubIndex < 0) bestSubIndex = 0;
+      if (bestSubIndex >= activeItem.subTabs.length) bestSubIndex = activeItem.subTabs.length - 1;
+    }
+  }
+
+  if (bestIndex !== selectedIndex || bestSubIndex !== selectedSubIndex) {
     selectedIndex = bestIndex;
+    selectedSubIndex = bestSubIndex;
     renderRadialMenu();
   }
 }
@@ -614,13 +767,14 @@ export function executeSelectedRadialAction() {
   if (selectedIndex >= 0) {
     const item = items[selectedIndex];
     if (item) {
-      executeItem(item);
+      executeItem(item, selectedSubIndex);
       return true;
     }
   } else if (selectedIndex === -1) {
-    // Ação no Hub Central: Voltar ou Fechar
     if (menu.parent) {
       activeMenu = menu.parent;
+      selectedIndex = -1;
+      selectedSubIndex = -1;
       renderRadialMenu();
       return true;
     } else {
@@ -675,7 +829,7 @@ export function setupRadialMenu(helpers) {
     overlay.onpointerdown = (e) => {
       if (!isOpen) return;
 
-      if (e.target.closest('#radial-center-btn') || e.target.closest('.gta-slice-path')) {
+      if (e.target.closest('#radial-center-btn') || e.target.closest('.gta-slice-path') || e.target.closest('.gta-subslice-path')) {
         return;
       }
 
@@ -741,7 +895,6 @@ export function setupRadialMenu(helpers) {
     }
   });
 
-  // Suporte a Teclado no Menu Radial (Hold Q para abrir, release Q para executar)
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyQ' && e.target.tagName !== 'INPUT') {
       e.preventDefault();

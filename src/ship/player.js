@@ -348,14 +348,11 @@ export function updGlow(dt, now) {
 }
 
 export function updGlowHelm(dt, now) {
-  const pu = .55 + .25 * Math.sin(now * .008);
   for (const g of SH.whg) {
-    const tg = INT.grab && INT.grab.t === 'helm' ? 1 : 0;
-    g.k += (tg - g.k) * Math.min(1, dt * 10);
-    if (g.k < .003) g.k = 0;
-    const m = g.o.material;
-    if (tg) m.emissive.copy(GC.h);
-    m.emissiveIntensity = g.k * pu;
+    g.k = 0;
+    if (g.o && g.o.material) {
+      g.o.material.emissiveIntensity = 0;
+    }
   }
 }
 

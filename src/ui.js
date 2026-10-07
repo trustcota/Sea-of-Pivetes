@@ -451,7 +451,7 @@ export function setupUI(actions = {}) {
   function mkSl(name, fn) {
     const r = document.createElement('div');
     r.className = 'sr';
-    r.innerHTML = '<span>' + name + '</span><input type="range" min="0" max="100" value="100"><b>100%</b>';
+    r.innerHTML = '<span>' + name + '</span><input type="range" min="0" max="100" value="0"><b>0%</b>';
     const i = r.children[1], b = r.children[2];
     i.oninput = () => { b.textContent = i.value + '%'; fn(i.value / 100); };
     if (sls) sls.append(r);
