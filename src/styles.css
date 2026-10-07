@@ -259,6 +259,49 @@ input[type="range"]::-moz-range-thumb {
   pointer-events: none;
 }
 
+/* Contador de FPS */
+.fps-counter-badge {
+  position: fixed;
+  top: calc(62px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 190;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: var(--parchment);
+  border: 2px solid var(--line);
+  box-shadow: 2px 2px 0px 0px var(--line);
+  color: var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+  user-select: none;
+  border-radius: 4px;
+}
+
+.fps-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2ebd59;
+  box-shadow: 0 0 6px rgba(46, 189, 89, 0.6);
+  flex-shrink: 0;
+}
+
+.fps-counter-badge.fps-medium .fps-dot {
+  background: #f5a623;
+  box-shadow: 0 0 6px rgba(245, 166, 35, 0.6);
+}
+
+.fps-counter-badge.fps-low .fps-dot {
+  background: #e5484d;
+  box-shadow: 0 0 6px rgba(229, 72, 77, 0.6);
+}
+
 #pr {
   position: fixed;
   top: calc(12px + env(safe-area-inset-top, 0px));

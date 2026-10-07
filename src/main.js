@@ -8,12 +8,18 @@ import { updExtras, updSpeedFx, vn, updSun, updAtmosphere } from './world/weathe
 import { ship, fl } from './ship/ship.js';
 import { updShipPhysics } from './ship/physics.js';
 import { setFpv, resetPlayer, updFPV, updGlow, updGlowHelm, qD } from './ship/player.js';
-import { setupUI, updWindHud, updAnchor } from './ui.js';
+import { setupUI, updWindHud, updAnchor, updateFpsVisibility } from './ui.js';
 import { isRadialMenuOpen, updateRadialSelectionByDirection, executeSelectedRadialAction } from './radialMenu.js';
 import { fishManager } from './world/fish.js';
 import { fishingSystem } from './world/fishing.js';
 import { bestiaryModal } from './ui/BestiaryModal.js';
 import './pwa.js';
+
+let fpsFrames = 0;
+let fpsLastTime = performance.now();
+let currentFps = 60;
+const fpsValEl = document.getElementById('fps-val');
+const fpsBadgeEl = document.getElementById('fps-counter');
 
 let vy = 0, pt = 0, rl = 0;
 let vyv = 0, ptv = 0, rlv = 0;
@@ -113,6 +119,7 @@ export function returnToMenu() {
   if (ingameBtn) ingameBtn.style.display = 'none';
 
   document.querySelectorAll('.in-game-hud').forEach(el => el.classList.add('game-hud-hidden'));
+  updateFpsVisibility();
 }
 
 // Câmera orbital, FPV e controles de toque do ponteiro com joystick visual
@@ -357,6 +364,7 @@ function loop(now) {
 
       const ingameBtn = document.getElementById('btn-ingame-menu');
       if (ingameBtn) ingameBtn.style.display = 'flex';
+      updateFpsVisibility();
     }
   } else if (CAM.fpv) {
     updFPV(dt, rows, SL, rrows, hlm);
@@ -367,6 +375,21 @@ function loop(now) {
     cam.position.set(cx, Math.max(2.5 + Math.sin(CAM.pit) * CAM.dist, H(cx + ST.px, cz + ST.pz) + 2), cz);
     cam.lookAt(0, 4.5, 0);
     cam.rotateZ(Math.sin(now * .0008) * .035 * s);
+  }
+
+  // Medição contínua de FPS com atualização periódica a cada 350ms
+  fpsFrames++;
+  if (now - fpsLastTime >= 350) {
+    currentFps = Math.round((fpsFrames * 1000) / (now - fpsLastTime));
+    fpsFrames = 0;
+    fpsLastTime = now;
+    if (fpsValEl) {
+      fpsValEl.textContent = currentFps;
+    }
+    if (fpsBadgeEl) {
+      fpsBadgeEl.classList.toggle('fps-low', currentFps < 30);
+      fpsBadgeEl.classList.toggle('fps-medium', currentFps >= 30 && currentFps < 52);
+    }
   }
 
   // Efeito FOV de velocidade

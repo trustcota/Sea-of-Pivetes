@@ -154,9 +154,10 @@
         </div>
         <div class="settings-group">
           <label class="settings-label">Opções Gráficas</label>
-          <div class="settings-btn-grid" style="grid-template-columns: 1fr 1fr;">
+          <div class="settings-btn-grid" style="grid-template-columns: 1fr 1fr 1fr;">
             <button id="modal-ar" class="opt-btn on">Girar Câmera</button>
             <button id="modal-wf" class="opt-btn">Mostrar Malha</button>
+            <button id="modal-fps" class="opt-btn on">Contador FPS</button>
           </div>
         </div>
         <div class="settings-group" id="settings-menu-return-row" style="display: none; margin-top: 12px;">
@@ -361,6 +362,7 @@
 <input id="mapa-gn" type="range" min="40" max="100" step="5" value="85">
 </div>
 <div id="wh" class="in-game-hud"><svg viewBox="0 0 100 100" width="88" height="88"><g id="whc" transform="translate(50 50)"><circle cx="0" cy="0" r="46" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="2"/><line x1="0" y1="-46" x2="0" y2="-40" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="0" y1="40" x2="0" y2="46" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="40" y1="0" x2="46" y2="0" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><line x1="-46" y1="0" x2="-40" y2="0" stroke="currentColor" stroke-width="1.5" stroke-opacity=".5"/><text x="0" y="-29" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#e5534b" style="user-select:none">N</text><text x="0" y="31" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">S</text><text x="31" y="1" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">L</text><text x="-31" y="1" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="currentColor" style="user-select:none">O</text></g><path d="M50 26 L62 68 L50 61 L38 68 Z" fill="currentColor" fill-opacity=".8"/><g id="wha" transform="translate(50 50)"><line x1="0" y1="42" x2="0" y2="-4" style="stroke:var(--acc)" stroke-width="4" stroke-linecap="round"/><polygon points="0,-20 -9,-4 9,-4" style="fill:var(--acc)"/></g></svg><div id="wht"></div></div>
+<div id="fps-counter" class="fps-counter-badge in-game-hud" style="display: none;"><span class="fps-dot"></span>FPS: <span id="fps-val">60</span></div>
 <div id="pr" class="in-game-hud"></div>
 <div id="gg" class="in-game-hud"><div id="gl"></div><div class="bar"><i id="gf"></i><s></s></div><div id="gv"></div></div>
 <button id="gb" class="in-game-hud">Pegar</button>

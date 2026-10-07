@@ -91,6 +91,11 @@ export function setupUI(actions = {}) {
       const modalWf = $('modal-wf');
       if (modalWf) modalWf.classList.add('on');
     }
+    const modalFps = $('modal-fps');
+    if (modalFps) {
+      modalFps.classList.toggle('on', !!SETTINGS.showFps);
+    }
+    updateFpsVisibility();
   }
 
   // Botões da Tela Inicial e Modais
@@ -184,6 +189,21 @@ export function setupUI(actions = {}) {
     if (modalWf && origWf) {
       modalWf.classList.toggle('on', origWf.classList.contains('on'));
     }
+
+    const modalFps = $('modal-fps');
+    if (modalFps) {
+      modalFps.classList.toggle('on', !!SETTINGS.showFps);
+    }
+  }
+
+  const modalFps = $('modal-fps');
+  if (modalFps) {
+    modalFps.onclick = () => {
+      SETTINGS.showFps = !SETTINGS.showFps;
+      modalFps.classList.toggle('on', SETTINGS.showFps);
+      saveSettingsState();
+      updateFpsVisibility();
+    };
   }
 
   const openSettings = () => {
@@ -630,5 +650,12 @@ export function updAnchor(dt) {
   SH.cap.rotation.y = AN.d * 40;
   if (anb) {
     anb.textContent = 'Âncora: ' + (AN.set ? 'fundeada (içar)' : AN.d > .97 ? 'arrastando' : AN.d > .02 ? (AN.t > AN.d ? 'descendo' : 'subindo') : AN.t > .5 ? 'descendo' : 'içada (lançar)');
+  }
+}
+
+export function updateFpsVisibility() {
+  const el = document.getElementById('fps-counter');
+  if (el) {
+    el.style.display = (SETTINGS.showFps && GAME.state === 'PLAY') ? 'flex' : 'none';
   }
 }

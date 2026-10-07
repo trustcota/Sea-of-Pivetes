@@ -483,6 +483,13 @@ export class FishingSystem {
     this.showObj.scale.setScalar(.001);
     this.showObj.position.set(0, 0, 0);
     this.showObj.rotation.set(0, 0, 0);
+    this.showObj.traverse(child => {
+      if (child.isMesh) {
+        child.frustumCulled = false;
+        child.visible = true;
+      }
+    });
+    this.showObj.visible = true;
     this.hk.add(this.showObj);
     this.hang.visible = true;
     this.animProg = 0;
@@ -1142,15 +1149,6 @@ export class FishingSystem {
       this.hangVert += ((isCatch ? 1 : 0) - this.hangVert) * Math.min(1, dt * 5);
       this.showObj.scale.setScalar(sc);
       this.showObj.position.x = -o.S.L * sc / 2;
-      this.showObj.traverse(child => {
-        if (child.isMesh) {
-          child.frustumCulled = false;
-          child.visible = true;
-          if (child.material) {
-            child.material.needsUpdate = true;
-          }
-        }
-      });
       this.showObj.visible = true;
       this.hk.rotation.z = this.hangVert * PI / 2;
 

@@ -109,8 +109,9 @@ export function buildFish(S_in) {
     bg.setAttribute('color', new T.Float32BufferAttribute(cs, 3));
     bg.setIndex(ix);
     bg.computeVertexNormals();
+    bg.computeBoundingSphere();
     const bMesh = new T.Mesh(bg, bodyMat);
-    bMesh.frustumCulled = false;
+    bMesh.frustumCulled = true;
     p.add(bMesh);
   }
 
@@ -119,8 +120,9 @@ export function buildFish(S_in) {
     geo.setAttribute('position', new T.Float32BufferAttribute(p, 3));
     geo.setIndex(ix);
     geo.computeVertexNormals();
+    geo.computeBoundingSphere();
     const pm = new T.Mesh(geo, m);
-    pm.frustumCulled = false;
+    pm.frustumCulled = true;
     return pm;
   };
 
@@ -295,6 +297,22 @@ const BIOME_SPECIES_MAP = {
   'Mar Aberto': ['tubarao_branco', 'espada', 'atum', 'dourado', 'barracuda', 'arraia', 'tubarao_martelo', 'peixe_lua']
 };
 
+export function disposeFish(group) {
+  if (!group) return;
+  group.traverse(child => {
+    if (child.geometry) {
+      child.geometry.dispose();
+    }
+    if (child.material) {
+      if (Array.isArray(child.material)) {
+        child.material.forEach(m => m.dispose());
+      } else {
+        child.material.dispose();
+      }
+    }
+  });
+}
+
 export class FishWorldManager {
   constructor() {
     this.fishList = [];
@@ -377,6 +395,7 @@ export class FishWorldManager {
   clearAll() {
     this.fishList.forEach(f => {
       this.container.remove(f.group);
+      disposeFish(f.group);
     });
     this.fishList = [];
   }
@@ -400,6 +419,7 @@ export class FishWorldManager {
         const newSpecies = this.getSpeciesForLocation(f.wx, f.wz);
         if (newSpecies !== f.speciesId && Math.random() < 0.4) {
           this.container.remove(f.group);
+          disposeFish(f.group);
           const newArticulated = createArticulatedFishMesh(newSpecies);
           newArticulated.group.scale.setScalar(0.55);
           this.container.add(newArticulated.group);
@@ -410,8 +430,10 @@ export class FishWorldManager {
         }
       }
 
-      // 2. Animação de natação
-      swim(fishObj, timeSec * f.speed, 1, 1);
+      // 2. Animação de natação (com LOD de distância)
+      if (distToPlayer < 120) {
+        swim(fishObj, timeSec * f.speed, 1, 1);
+      }
 
       // 3. Saltos de peixes velozes
       const canJump = (speciesId === 'dourado' || speciesId === 'atum' || speciesId === 'espada');

@@ -56,7 +56,8 @@ export const SETTINGS = Object.assign({
   terrainSpacing: 220,
   terrainDensity: 80,
   autoCam: true,
-  wireframe: false
+  wireframe: false,
+  showFps: true
 }, savedSettings);
 
 // Garante que o jogo sempre inicia em estado Calmo por padrão e vento normalizado

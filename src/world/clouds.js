@@ -190,6 +190,7 @@ const vSunDir = new T.Vector3();
 const vCamPos = new T.Vector3();
 const vToCloud = new T.Vector3();
 const vCloudPos = new T.Vector3();
+const vCloudDir = new T.Vector3();
 const cldColor = new T.Color();
 
 // Atualiza todas as nuvens: vento, deformação, clima e cálculo de oclusão solar
@@ -270,9 +271,9 @@ export function updateCloudsSystem(dt, now, vwx, vwz, wang, wsp, weatherState) {
     const distToCloud = vToCloud.length();
 
     if (distToCloud > 10) {
-      const cloudDir = vToCloud.clone().normalize();
+      vCloudDir.copy(vToCloud).normalize();
       // Cosseno do ângulo entre a direção para o Sol e a direção para a Nuvem
-      const dotSunCloud = cloudDir.dot(vSunDir);
+      const dotSunCloud = vCloudDir.dot(vSunDir);
 
       if (dotSunCloud > 0.85) {
         // A nuvem está no cone de visão do sol!

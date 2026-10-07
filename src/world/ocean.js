@@ -7,14 +7,10 @@ import { ILHAS } from './archipelago.js';
 import { cloudState } from './clouds.js';
 
 const T = THREE;
-const cD = new T.Color(), cS = new T.Color(), cCr = new T.Color(), q = new T.Color();
-const sunDir = new T.Vector3();
-const vA = new T.Vector3(), vB = new T.Vector3(), vC = new T.Vector3();
-const vCB = new T.Vector3(), vAB = new T.Vector3(), norm = new T.Vector3();
-const viewDir = new T.Vector3(), halfVec = new T.Vector3(), facePos = new T.Vector3();
+const cD = new T.Color(), cS = new T.Color(), cCr = new T.Color();
 
-// Oceano: malha alta resolução com flat shading facetado estilizado
-const N = 120, SZ = 260, cl = SZ / N, bx = [], bz = [], ix = [];
+// Oceano: malha otimizada para 60 FPS com flat shading facetado estilizado
+const N = 64, SZ = 260, cl = SZ / N, bx = [], bz = [], ix = [];
 for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) { bx.push((i / N - .5) * SZ); bz.push((j / N - .5) * SZ); }
 for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const a = j * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1; ix.push(a, c, b, b, c, d); }
 const NV = bx.length, P = new Float32Array(NV * 3), pos = new Float32Array(ix.length * 3), col = new Float32Array(ix.length * 3), jit = [];
@@ -52,22 +48,36 @@ setWaveDir(.45);
 export function H(x, z) {
   let y = SEAS.chop * Math.sin(x * .8 + SEAS.wt * 1.9) * Math.cos(z * .7 - SEAS.wt * 1.5);
   for (const w of WV) y += SEAS.amp * w.f * Math.sin(w.k * (w.dx * x + w.dz * z) - Math.sqrt(9.8 * w.k) * SEAS.wt);
-  if (ILHAS && ILHAS.waterClamp) {
-    return ILHAS.waterClamp(x, z, y);
+  if (ILHAS && ILHAS.waveDamp) {
+    const damp = ILHAS.waveDamp(x, z);
+    if (damp < 0.98 && ILHAS.waterClamp) {
+      return ILHAS.waterClamp(x, z, y);
+    }
+    return y * damp;
   }
-  const damp = ILHAS && ILHAS.waveDamp ? ILHAS.waveDamp(x, z) : 1.0;
-  return y * damp;
+  return y;
+}
+
+// Altura de onda ultrarrápida para sistemas de partículas secundárias
+export function fastH(x, z) {
+  const w0 = WV[0], w1 = WV[1];
+  const o0 = w0.o || (Math.sqrt(9.8 * w0.k) * SEAS.wt);
+  const o1 = w1.o || (Math.sqrt(9.8 * w1.k) * SEAS.wt);
+  return SEAS.amp * (w0.f * Math.sin(w0.k * (w0.dx * x + w0.dz * z) - o0) + w1.f * Math.sin(w1.k * (w1.dx * x + w1.dz * z) - o1));
 }
 
 // Perfil geométrico do casco do navio para evitar invasão de água no convés
 const HULL_W = [1.5, 1.9, 2.1, 2.2, 2.2, 2.1, 1.85, 1.4, 0.9, 0.4, 0];
 const HULL_B = [-0.8, -1.1, -1.3, -1.35, -1.35, -1.3, -1.2, -1.0, -0.7, -0.3, 0.1];
 
+const activeShadows = [];
+
 export function updSea(s) {
   const vd = ILHAS && ILHAS.vd ? ILHAS.vd() : 2;
   const cs = ILHAS && ILHAS.CS ? ILHAS.CS : 48;
   const targetRadius = (vd + 2.5) * cs;
   const scale = Math.max(1, (targetRadius * 2) / SZ);
+  const halfExtent = (SZ * scale) * 0.5;
 
   for (const w of WV) w.o = Math.sqrt(9.8 * w.k) * SEAS.wt;
 
@@ -91,7 +101,7 @@ export function updSea(s) {
       ox += k * w.dx;
       oz += k * w.dz;
     }
-    if (ILHAS && ILHAS.waterClamp) {
+    if (damp < 0.98 && ILHAS && ILHAS.waterClamp) {
       y = ILHAS.waterClamp(x, z, y);
     } else {
       y *= damp;
@@ -151,61 +161,93 @@ export function updSea(s) {
   c3(SHAL, s, cS);
   c3(CREST, s, cCr);
 
+  let sunDirX = -0.5, sunDirY = 0.7, sunDirZ = -0.5;
   if (sunL && sunL.position) {
-    sunDir.copy(sunL.position).normalize();
-  } else {
-    sunDir.set(-0.5, 0.7, -0.5).normalize();
+    const sl = Math.hypot(sunL.position.x, sunL.position.y, sunL.position.z) || 1;
+    sunDirX = sunL.position.x / sl;
+    sunDirY = sunL.position.y / sl;
+    sunDirZ = sunL.position.z / sl;
   }
+
+  const camPosX = cam.position.x;
+  const camPosY = cam.position.y;
+  const camPosZ = cam.position.z;
 
   const th = .68 - .16 * s;
   const fa = .25 + .75 * Math.min(1, s * 1.5);
   const hs = 1 / (SEAS.amp * 2.5 + SEAS.chop + .01);
   const ct = .5 * (.45 + .55 * s);
 
+  // Pré-filtra sombras de nuvens que incidem no mar ativo (elimina centenas de milhares de checagens inúteis)
+  activeShadows.length = 0;
+  const allShadows = cloudState.shadows;
+  const numAllShadows = allShadows.length;
+  for (let si = 0; si < numAllShadows; si++) {
+    const shw = allShadows[si];
+    if (Math.abs(shw.x) < halfExtent + shw.r && Math.abs(shw.z) < halfExtent + shw.r) {
+      activeShadows.push(shw);
+    }
+  }
+  const nActiveShadows = activeShadows.length;
+
   for (let f = 0; f < ix.length; f += 3) {
     const o = f * 3;
-    vA.set(pos[o], pos[o + 1], pos[o + 2]);
-    vB.set(pos[o + 3], pos[o + 4], pos[o + 5]);
-    vC.set(pos[o + 6], pos[o + 7], pos[o + 8]);
+    const ax = pos[o], ay = pos[o + 1], az = pos[o + 2];
+    const bx = pos[o + 3], by = pos[o + 4], bz = pos[o + 5];
+    const cx = pos[o + 6], cy = pos[o + 7], cz = pos[o + 8];
 
-    const avgY = (vA.y + vB.y + vC.y) / 3;
-    const avgX = (vA.x + vB.x + vC.x) / 3;
-    const avgZ = (vA.z + vB.z + vC.z) / 3;
-    facePos.set(avgX, avgY, avgZ);
+    const avgX = (ax + bx + cx) * 0.33333333;
+    const avgY = (ay + by + cy) * 0.33333333;
+    const avgZ = (az + bz + cz) * 0.33333333;
 
-    vCB.subVectors(vC, vB);
-    vAB.subVectors(vA, vB);
-    norm.crossVectors(vCB, vAB).normalize();
+    const abx = ax - bx, aby = ay - by, abz = az - bz;
+    const cbx = cx - bx, cby = cy - by, cbz = cz - bz;
+    let nx = cby * abz - cbz * aby;
+    let ny = cbz * abx - cbx * abz;
+    let nz = cbx * aby - cby * abx;
+    const invNorm = 1 / (Math.hypot(nx, ny, nz) || 1);
+    nx *= invNorm; ny *= invNorm; nz *= invNorm;
 
-    const dotSun = clamp(norm.dot(sunDir), -1, 1);
-    const steepness = 1 - clamp(norm.y, 0, 1);
+    const dotSun = clamp(nx * sunDirX + ny * sunDirY + nz * sunDirZ, -1, 1);
+    const steepness = 1 - clamp(ny, 0, 1);
     const heightNorm = clamp(.5 + ct * avgY * hs, 0, 1);
 
     // Vetor de visão da câmera para efeito Fresnel e reflexo especular
-    viewDir.subVectors(cam.position, facePos).normalize();
-    const NdotV = Math.max(0, norm.dot(viewDir));
+    let vx = camPosX - avgX, vy = camPosY - avgY, vz = camPosZ - avgZ;
+    const invVLen = 1 / (Math.hypot(vx, vy, vz) || 1);
+    vx *= invVLen; vy *= invVLen; vz *= invVLen;
+    const NdotV = Math.max(0, nx * vx + ny * vy + nz * vz);
 
     // 1. Cor base: Profundo (Safira Caribenha) -> Raso (Turquesa Vibrante)
-    q.copy(cD).lerp(cS, Math.pow(heightNorm, 1.15));
+    const hnPow = Math.pow(heightNorm, 1.15);
+    let qr = cD.r + (cS.r - cD.r) * hnPow;
+    let qg = cD.g + (cS.g - cD.g) * hnPow;
+    let qb = cD.b + (cS.b - cD.b) * hnPow;
 
     // 2. Subsurface Scattering (luz translúcida passando pelo corpo e crista da onda)
     if (heightNorm > 0.22) {
-      const sssFactor = clamp((heightNorm - 0.22) * 1.7 + dotSun * 0.35 + steepness * 0.45, 0, 1);
-      q.lerp(cCr, sssFactor * 0.78);
+      const sssFactor = clamp((heightNorm - 0.22) * 1.7 + dotSun * 0.35 + steepness * 0.45, 0, 1) * 0.78;
+      qr += (cCr.r - qr) * sssFactor;
+      qg += (cCr.g - qg) * sssFactor;
+      qb += (cCr.b - qb) * sssFactor;
     }
 
     // 3. Fresnel estilizado (reflexo translúcido do horizonte em ângulos rasos)
     const fresnel = Math.pow(1.0 - NdotV, 3.2) * 0.35;
-    q.lerp(cCr, fresnel);
+    qr += (cCr.r - qr) * fresnel;
+    qg += (cCr.g - qg) * fresnel;
+    qb += (cCr.b - qb) * fresnel;
 
     // 4. Brilho solar especular (Sun Glint / caminho dourado de luz)
-    halfVec.addVectors(sunDir, viewDir).normalize();
-    const NdotH = Math.max(0, norm.dot(halfVec));
+    let hx = sunDirX + vx, hy = sunDirY + vy, hz = sunDirZ + vz;
+    const invHLen = 1 / (Math.hypot(hx, hy, hz) || 1);
+    hx *= invHLen; hy *= invHLen; hz *= invHLen;
+    const NdotH = Math.max(0, nx * hx + ny * hy + nz * hz);
     if (NdotH > 0.6) {
-      const spec = Math.pow((NdotH - 0.6) / 0.4, 16) * 0.45 * (0.6 + 0.4 * s);
-      q.r = Math.min(1, q.r + spec * 1.05);
-      q.g = Math.min(1, q.g + spec * 0.98);
-      q.b = Math.min(1, q.b + spec * 0.88);
+      const spec = Math.pow((NdotH - 0.6) * 2.5, 16) * 0.45 * (0.6 + 0.4 * s);
+      qr = Math.min(1, qr + spec * 1.05);
+      qg = Math.min(1, qg + spec * 0.98);
+      qb = Math.min(1, qb + spec * 0.88);
     }
 
     // 5. Espuma dinâmica nas cristas das ondas
@@ -235,36 +277,45 @@ export function updSea(s) {
     }
 
     if (totalFoam > 0.02) {
-      q.lerp(FOAM, Math.min(1, totalFoam * 0.95));
+      const foamAmt = Math.min(1, totalFoam * 0.95);
+      qr += (FOAM.r - qr) * foamAmt;
+      qg += (FOAM.g - qg) * foamAmt;
+      qb += (FOAM.b - qb) * foamAmt;
     }
 
-    // 7. Sombra das nuvens projetada no oceano
-    let shadowFactor = 1.0;
-    const shadows = cloudState.shadows;
-    const nShadows = shadows.length;
-    for (let si = 0; si < nShadows; si++) {
-      const shw = shadows[si];
-      const dx = avgX - shw.x;
-      const dz = avgZ - shw.z;
-      const distSq = dx * dx + dz * dz;
-      const rSq = shw.r * shw.r;
-      if (distSq < rSq) {
-        const falloff = 1 - (distSq / rSq);
-        shadowFactor = Math.min(shadowFactor, 1 - falloff * shw.strength);
+    // 7. Sombra das nuvens projetada no oceano (otimizado com lista filtrada)
+    if (nActiveShadows > 0) {
+      let shadowFactor = 1.0;
+      for (let si = 0; si < nActiveShadows; si++) {
+        const shw = activeShadows[si];
+        const dx = avgX - shw.x;
+        const dz = avgZ - shw.z;
+        const distSq = dx * dx + dz * dz;
+        const rSq = shw.r * shw.r;
+        if (distSq < rSq) {
+          const falloff = 1 - (distSq / rSq);
+          shadowFactor = Math.min(shadowFactor, 1 - falloff * shw.strength);
+        }
       }
+      qr *= shadowFactor;
+      qg *= shadowFactor;
+      qb *= shadowFactor;
     }
-    q.multiplyScalar(shadowFactor);
 
     // 8. Modulação facetada sutil (estética low-poly polida)
-    q.multiplyScalar(jit[f / 3]);
+    const jm = jit[f / 3];
+    qr *= jm;
+    qg *= jm;
+    qb *= jm;
 
     for (let k = 0; k < 9; k += 3) {
-      col[o + k] = q.r;
-      col[o + k + 1] = q.g;
-      col[o + k + 2] = q.b;
+      col[o + k] = qr;
+      col[o + k + 1] = qg;
+      col[o + k + 2] = qb;
     }
   }
 
   og.attributes.position.needsUpdate = true;
   og.attributes.color.needsUpdate = true;
 }
+

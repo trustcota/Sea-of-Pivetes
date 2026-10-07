@@ -3,7 +3,7 @@ import { rnd, clamp, c3, m3 } from '../core/math.js';
 import { SKY, CLD, WH } from '../core/palettes.js';
 import { sc, cam, sky, sunL, hemi, fLight } from '../core/renderer.js';
 import { S, WI, ST, LT, FX, AN } from '../core/state.js';
-import { H } from '../world/ocean.js';
+import { H, fastH } from '../world/ocean.js';
 import { clouds, cm, cloudState, updateCloudsSystem } from '../world/clouds.js';
 import { ILHAS } from '../world/archipelago.js';
 import { SH } from '../ship/ship.js';
@@ -86,7 +86,7 @@ export function updExtras(dt, ch, sh) {
     const o = i * 3;
     wkP[o] -= ST.svx * dt;
     wkP[o + 2] -= ST.svz * dt;
-    wkP[o + 1] = H(wkP[o] + ST.px, wkP[o + 2] + ST.pz) + .15;
+    wkP[o + 1] = fastH(wkP[o] + ST.px, wkP[o + 2] + ST.pz) + .15;
     wkC[o] = .1 + .9 * L;
     wkC[o + 1] = .45 + .55 * L;
     wkC[o + 2] = .55 + .45 * L;
@@ -113,7 +113,7 @@ export function updAnchorSplash(dt, ch, sh) {
     const lx = .88 + rnd(-.3, .3), lz = 3.9 + rnd(-.3, .3);
     const gx = lx * ch + lz * sh + ST.px;
     const gz = lz * ch - lx * sh + ST.pz;
-    const gy = H(gx, gz) + rnd(.05, .3);
+    const gy = fastH(gx, gz) + rnd(.05, .3);
 
     anP[i * 3] = gx;
     anP[i * 3 + 1] = gy;
@@ -133,7 +133,7 @@ export function updAnchorSplash(dt, ch, sh) {
     anP[i * 3 + 1] += anV[i * 3 + 1] * dt;
     anP[i * 3 + 2] += anV[i * 3 + 2] * dt;
 
-    if (anP[i * 3 + 1] <= H(anP[i * 3], anP[i * 3 + 2])) {
+    if (anP[i * 3 + 1] <= fastH(anP[i * 3], anP[i * 3 + 2])) {
       anL[i] = 0;
       anP[i * 3 + 1] = -50;
     }
@@ -264,7 +264,7 @@ export function updBowSpray(dt, ch, sh) {
       const side = (k % 2 === 0 ? 1 : -1);
       const lx = side * rnd(.4, 1.1), ly = rnd(.2, .6), lz = 4.6 + rnd(0, .8);
       bsP[i * 3] = lx * ch + lz * sh + ST.px;
-      bsP[i * 3 + 1] = H(bsP[i * 3], lz * ch - lx * sh + ST.pz) + ly;
+      bsP[i * 3 + 1] = fastH(bsP[i * 3], lz * ch - lx * sh + ST.pz) + ly;
       bsP[i * 3 + 2] = lz * ch - lx * sh + ST.pz;
 
       bsV[i * 3] = (side * rnd(.8, 2.2) * ch + rnd(-.4, .4)) * (speed * .25);
@@ -285,7 +285,7 @@ export function updBowSpray(dt, ch, sh) {
     bsP[i * 3 + 1] += bsV[i * 3 + 1] * dt;
     bsP[i * 3 + 2] += bsV[i * 3 + 2] * dt;
 
-    if (bsP[i * 3 + 1] <= H(bsP[i * 3], bsP[i * 3 + 2])) {
+    if (bsP[i * 3 + 1] <= fastH(bsP[i * 3], bsP[i * 3 + 2])) {
       bsL[i] = 0;
       bsP[i * 3 + 1] = -50;
     }
@@ -317,10 +317,10 @@ export function updSpeedFx(dt) {
     spA[i * 2 + 1] = z;
     const j = i * 6, x2 = x + ux * L, z2 = z + uz * L;
     spP[j] = x;
-    spP[j + 1] = H(x + ST.px, z + ST.pz) + .12;
+    spP[j + 1] = fastH(x + ST.px, z + ST.pz) + .12;
     spP[j + 2] = z;
     spP[j + 3] = x2;
-    spP[j + 4] = H(x2 + ST.px, z2 + ST.pz) + .12;
+    spP[j + 4] = fastH(x2 + ST.px, z2 + ST.pz) + .12;
     spP[j + 5] = z2;
   }
   spG.attributes.position.needsUpdate = true;
@@ -424,7 +424,7 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   // Raios e tempestade
   LT.flash = Math.max(0, LT.flash - dt * 2.6);
   const ff = LT.flash * (.65 + .35 * Math.sin(now * .07));
-  if (s > .72) {
+  if (visualS > .72) {
     LT.nl -= dt;
     if (LT.nl < 0) {
       strike();
