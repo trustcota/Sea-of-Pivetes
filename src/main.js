@@ -151,8 +151,8 @@ cv.onpointerdown = e => {
   }
   const isTouch = e.pointerType !== 'mouse' || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
   if (CAM.fpv && !isTouch && e.button === 0) {
-    if (document.pointerLockElement !== cv) {
-      try { cv.requestPointerLock(); } catch (_) {}
+    if (!document.pointerLockElement) {
+      try { cv.requestPointerLock(); } catch (err) { console.warn('Pointer lock failed', err); }
     }
   }
   if (CAM.fpv && isTouch) {
