@@ -149,7 +149,7 @@ export const SH = (() => {
 
   /* Sistema de velas: içar (d), rotacionar (ângulo limitado por mastro), cordas dinâmicas */
   const sails = [], rigs = [], NX = 18, NY = 12, V = (x, y, z) => new T.Vector3(x, y, z);
-  const gR = M('#d9b24a', { roughness: .7 }), rR = M('#b3392f', { roughness: .7 });
+  const gR = M('#d9b24a', { roughness: .7 }), rR = M('#52321b', { roughness: .7 });
   const grid = (nx, ny) => {
     const g = new T.PlaneGeometry(1, 1, nx, ny), uv = g.attributes.uv, n = uv.count, c = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -197,7 +197,7 @@ export const SH = (() => {
     const hsBot = own(dr(.02, gR));
     setR(hsBot, V(cx, bk.y - 0.4, z - .30), V(cx, 1.34, z - .30));
     
-    const LF = [dr(.022), dr(.022)], BR = [own(dr(.026, rR)), own(dr(.026, rR))], CL = [own(dr(.022, gR)), own(dr(.022, gR))], SS = [dr(.03), dr(.03)], BU = own(dr(.022, gR)), HY = own(dr(.02, gR));
+    const LF = [dr(.022), dr(.022)], BR = (ix === 0) ? [own(dr(.026, rR)), own(dr(.026, rR))] : [], CL = [own(dr(.022, gR)), own(dr(.022, gR))], SS = [dr(.03), dr(.03)], BU = own(dr(.022, gR)), HY = own(dr(.02, gR));
     const so = {
       name, d: 0, t: 0, upd(tt, wd, fs) {
         const d = this.d, a = rg.a, c = Math.cos(a), s2 = Math.sin(a), W2 = (x, y, zl) => V(x * c + zl * s2, y, -x * s2 + zl * c + z);
@@ -224,7 +224,7 @@ export const SH = (() => {
         const yc = W2(0, y, .3), ib = n - 1 - NX / 2;
         [1, -1].forEach((k, j) => {
           const i = k > 0 ? n - 1 : n - 1 - NX, cr = W2(p.getX(i), p.getY(i), p.getZ(i) + .3);
-          setR(LF[j], W2(k * (hl - .1), y, .3), V(0, mt, z)); setR(BR[j], W2(k * hl, y, .3), rail(k, z - 2.2));
+          setR(LF[j], W2(k * (hl - .1), y, .3), V(0, mt, z)); if (BR[j]) setR(BR[j], W2(k * hl, y, .3), rail(k, z - 2.2));
           setR(CL[j], cr, W2(k * (hl - .7), y, .3)); setR(SS[j], cr, rail(k, z - .6))
         });
         setR(BU, W2(p.getX(ib), p.getY(ib), p.getZ(ib) + .3), yc); setR(HY, yc, bk)
@@ -234,25 +234,57 @@ export const SH = (() => {
   const tr = (name, rg, tk, hd, cw, ph, o) => {
     if (!rg.ri) { rg.ri = 1; [1, -1].forEach(k => inter.push({ t: 'rot', rg, k, pos: rail(k, o.az), label: 'Escota · ' + rg.name })) }
     const g = grid(14, 14), p = g.attributes.position, uv = g.attributes.uv, n = p.count, m = add(g, M('#ffffff', { vertexColors: true })); m.frustumCulled = false;
-    const a = V(...tk), hF = V(...hd), cF = V(...cw), h2 = V(), c2 = V(), cb = V(), Lp = V(), Rp = V(), bk = V(...o.bk);
-    const SS = [1, -1].map(() => own(dr(.026, rR))), HY = own(dr(.02, gR)), BM = o.boom ? dr(.065, wood) : null;
-    box(.14, .14, .14, iron, ...o.bk); box(.18, .1, .12, iron, ...o.ck); const hs = own(dr(.02, gR)); setR(hs, V(...o.bk), V(...o.ck));
+    const a = V(...tk), mastTop = o.mastTop ? V(...o.mastTop) : V(...o.bk), bk = V(...o.bk);
+    if (o.mastTop) {
+      const tStay = (a.z - bk.z) / (a.z - mastTop.z);
+      bk.copy(a).lerp(mastTop, tStay);
+    }
+    const hF = o.mastTop ? bk.clone() : V(...hd), cF = V(...cw), h2 = V(), c2 = V(), cb = V(), Lp = V(), Rp = V();
+    const SS = [1, -1].map(() => own(dr(.026, rR))), HY = own(dr(.028, rp)), BM = o.boom ? dr(.065, wood) : null;
+    const GR = [0.2, 0.45, 0.7, 0.9].map(() => own(add(new T.TorusGeometry(.045, .012, 4, 8), iron)));
+    const bun = own(dr(.06, sailM));
+    box(.14, .14, .14, iron, bk.x, bk.y, bk.z); box(.18, .1, .12, iron, ...o.ck); const hs = own(dr(.02, gR)); setR(hs, bk, V(...o.ck));
     const so = {
       name, d: 0, t: 0, upd(tt, wd, fs) {
         const d = this.d, bl = (wd < 0 ? -1 : 1) * (.12 + .88 * Math.abs(wd)) * .5 * Math.pow(d, .6), fa = (.03 + .14 * fs) * Math.min(1, d * 1.5), cs = Math.cos(rg.a), sn = Math.sin(rg.a), on = d > .015;
         const dx = cF.x - a.x, dz = cF.z - a.z; cb.set(a.x + dx * cs + dz * sn, cF.y, a.z - dx * sn + dz * cs);
-        h2.copy(a).lerp(hF, d); c2.copy(a).lerp(cb, .4 + .6 * d); m.visible = on; SS.forEach(r => r.visible = on); HY.visible = on;
+        if (!o.boom) {
+          const yBowsprit = a.y - (a.z - cb.z) * 0.39 + 0.14;
+          cb.y = cF.y * d + yBowsprit * (1 - d);
+        }
+        h2.copy(a).lerp(hF, d); c2.copy(cb); m.visible = on; SS.forEach(r => r.visible = true);
+        HY.visible = true;
+        setR(HY, a, mastTop);
+        const rr = .025 + .055 * (1 - d);
+        bun.visible = d < .985;
+        setR(bun, a, cb);
+        bun.scale.x = rr / .06;
+        bun.scale.z = rr / .06;
+        GR.forEach((ring, idx) => {
+          const tf = [0.2, 0.45, 0.7, 0.9][idx];
+          ring.visible = true;
+          ring.position.copy(a).lerp(h2, tf);
+          ring.rotation.x = Math.PI / 2;
+        });
         for (let i = 0; i < n; i++) {
           const u = uv.getX(i), t = uv.getY(i); Lp.copy(a).lerp(h2, t); Rp.copy(c2).lerp(h2, t); Lp.lerp(Rp, u);
           p.setXYZ(i, Lp.x + bl * Math.sin(Math.PI * u) * (1 - .45 * t) + fa * u * Math.sin(u * 8 + t * 5 - tt * 3.6 + ph), Lp.y, Lp.z)
         }
         p.needsUpdate = true;
-        [1, -1].forEach((k, j) => setR(SS[j], c2, rail(k, o.az))); setR(HY, h2, bk); if (BM) setR(BM, a, cb)
+        [1, -1].forEach((k, j) => setR(SS[j], c2, rail(k, o.az))); if (BM) setR(BM, a, cb)
       }
-    }; so.rg = rg; so.rop = SS; so.hr = hs; so.sq = 0; so.ar = .5 * V().crossVectors(hF.clone().sub(a), cF.clone().sub(a)).length(); so.ps = 0; so.pt = 0; so.fl = .1; so.gl = [G(m, 's'), G(hs, 'h'), G(HY, 'h'), ...SS.map(o => G(o, 'r'))]; sails.push(so); inter.push({ t: 'hoist', sail: so, pos: V(...o.ck), label: 'Talha · ' + name })
+    }; so.rg = rg; so.rop = SS; so.hr = hs; so.sq = 0; so.ar = .5 * V().crossVectors(hF.clone().sub(a), cF.clone().sub(a)).length(); so.ps = 0; so.pt = 0; so.fl = .1; so.gl = [G(m, 's'), G(bun, 's'), G(hs, 'h'), G(HY, 'h'), ...GR.map(o => G(o, 'h')), ...SS.map(o => G(o, 'r'))]; sails.push(so); inter.push({ t: 'hoist', sail: so, pos: V(...o.ck), label: 'Talha · ' + name })
   };
   const rM = rig('Principal', .2, 60, 1), rZ = rig('Mezena', -3.3, 75, 0), rJ = rig('Bujarrona', 0, 65, 0);
-  tr('Bujarrona', rJ, [0, 3.1, 9], [0, 7.5, 3.75], [0, 3.2, 5.9], 0, { bk: [0, 7.68, 3.55], ck: [.45, .47, 2.8], az: 4.7 });
+  tr('Bujarrona', rJ, [0, 3.1, 9], [0, 7.1, 3.9], [0, 3.2, 5.9], 0, { bk: [0, 7.1, 3.9], ck: [0, 1.48, 4.7], az: 4.7, mastTop: [0, 9.8, .2] });
+  // Suporte de madeira interligando as duas cordas de rotação da vela frontal (Bujarrona)
+  box(1.68, 0.07, 0.18, dark, 0, 1.48, 4.7);
+  box(0.08, 0.75, 0.08, wood, -0.72, 1.10, 4.7);
+  box(0.08, 0.75, 0.08, wood, 0.72, 1.10, 4.7);
+  // Pino metálico/malagueta no centro do suporte para prender a corda de hastear a vela frontal
+  box(.05, .16, .05, iron, 0, 1.57, 4.7);
+  box(.04, .04, .06, iron, 0, 1.48, 4.7);
+  add(new T.TorusGeometry(.04, .012, 4, 8), gold, 0, 1.48, 4.7).rotation.x = Math.PI / 2;
   sq('Grande', rM, 5.1, 6.2, 2.9, 10.3, .35, 0); sq('Gávea', rM, 7.9, 4.8, 2.3, 10.3, .35, 1); sq('Joanete', rM, 9.6, 3.2, 1.2, 10.3, .35, 2);
   // Suporte de madeira do mastro da mezena (Mesa de malaguetas e amarração das cordas)
   box(0.95, 0.06, 0.20, dark, 0, 2.02, -3.52);
@@ -264,6 +296,17 @@ export const SH = (() => {
 
   tr('Mezena', rZ, [0, 3.4, -3.45], [0, 7.2, -3.45], [0, 3.4, -5.2], 1.3, { bk: [0, 7.6, -3.3], ck: [.42, 2.02, -3.52], az: -5, boom: 1 });
   rope([0, 1.6, 5.2], [0, 3.1, 9.3], .13, wood, 6);
+  // Suporte de madeira e braçadeira de ferro do gurupés na proa
+  box(.36, .32, .45, dark, 0, 1.48, 5.25);
+  add(new T.TorusGeometry(.2, .04, 4, 10), iron, 0, 1.62, 5.25).rotation.x = Math.PI / 2;
+
+  // Ferragens e anéis de metal na ponta do gurupés (nariz do navio)
+  add(new T.TorusGeometry(.16, .035, 4, 10), iron, 0, 3.1, 9.2).rotation.x = Math.PI / 2;
+  add(new T.TorusGeometry(.05, .015, 4, 8), gold, 0, 3.14, 9.2).rotation.x = Math.PI / 2;
+
+  // Barba do Gurupés / Estai Inferior (suporte em cabo de ferro que prende a ponta do gurupés para baixo ao bico da proa)
+  rope([0, 3.1, 9.2], [0, 1.0, 5.8], .038, iron, 6, 0);
+
   add(new T.IcosahedronGeometry(.22, 0), gold, 0, 2.1, 6.02);
   cyl(.5, .38, .5, 8, wood, 0, 10.1, .2); cyl(.58, .58, .07, 8, dark, 0, 10.38, .2);
 
@@ -277,8 +320,6 @@ export const SH = (() => {
     }
   });
   const T2 = [0, 10.35, .2], T3 = [0, 7.6, -3.3];
-  // Estais estáticos do mastro central removidos para limpar a visualização
-  rope(T3, [0, 2.56, -5.98], .035, rp, 5, .1);
 
   /* Bandeira Jolly Roger */
   const jolly = () => {
