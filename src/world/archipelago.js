@@ -218,40 +218,6 @@ function pump() { const t0 = performance.now(), lim = bud > 0 ? 24 : 7; bud--; w
 function tH(x, z) { const S = CS / N, i = Math.floor(x / S), j = Math.floor(z / S), u = x / S - i, v = z / S - j, a = field(i * S, j * S).h, b = field((i + 1) * S, j * S).h, c = field(i * S, (j + 1) * S).h, d = field((i + 1) * S, (j + 1) * S).h; return u + v <= 1 ? a + u * (b - a) + v * (c - a) : d + (1 - u) * (c - d) + (1 - v) * (b - d) }
 function nearestIsland(x, z) { const ix = Math.floor(x / IC), iz = Math.floor(z / IC); let b = null, bd = 1e9; for (let i = ix - 2; i <= ix + 2; i++) for (let j = iz - 2; j <= iz + 2; j++) { const c = cell(i, j); if (c) { const d = Math.hypot(c.x - x, c.z - z); if (d < bd) { bd = d; b = c } } } return b }
 
-/* Atenuação de ondas em aproximação de praias e terra firme */
-function waveDamp(x, z) {
- const ix = Math.floor(x / IC), iz = Math.floor(z / IC);
- let maxM = -1;
- for (let i = ix - 1; i <= ix + 1; i++) {
-  for (let j = iz - 1; j <= iz + 1; j++) {
-   const c = cell(i, j);
-   if (!c) continue;
-   const dx = x - c.x, dz = z - c.z;
-   const dist = Math.hypot(dx, dz);
-   const q = 1 - dist / (c.r * 1.35);
-   if (q > maxM) maxM = q;
-  }
- }
- if (maxM <= -0.15) return 1.0;
- if (maxM >= 0.22) return 0.0;
- return Math.max(0.0, Math.min(1.0, (0.22 - maxM) / 0.37));
-}
-
-/* Amortecimento físico de ondas e proteção total contra invasão de água na praia */
-function waterClamp(x, z, rawWaveY) {
- const th = tH(x, z);
- if (th >= 0.0) {
-  return Math.min(-0.35, -0.35 - th * 0.8);
- }
- if (th > -2.2) {
-  const depth = -th;
-  const damp = Math.max(0.0, Math.min(1.0, depth / 2.2));
-  const dampedY = rawWaveY * damp;
-  return Math.min(dampedY, th - 0.08);
- }
- return rawWaveY;
-}
-
 window.MAP = { SEA, get floor() { return SEA - GEN.depth }, cfg: GEN, height: tH, depth: (x, z) => SEA - tH(x, z), isLand: (x, z) => tH(x, z) >= SEA, island: nearestIsland, biome: (x, z) => BI[field(x, z).b].n, get seed() { return WS } };
 
 const DRAFT = 1.8, HP = [[0, 5], [0, -5], [0, 0], [0, 2.5], [0, -2.5], [-2.2, 0], [2.2, 0]];
@@ -273,5 +239,5 @@ function regen() { cells.clear(); chunks.forEach(drop); chunks.clear(); queue.le
 function setCfg(k, v) { GEN[k] = v; calc(); regen() }
 function reseed() { WS = (Math.random() * 1e9 | 0) || 1; regen() }
 function setVD(v) { VD = v; plan.f = 1; bud = 50; }
-return { hit, startPos, safeNear, update, prime, setCfg, reseed, setVD, vd: () => VD, CS, tH, SEA, GEN, chunks, queue, nearestIsland, waveDamp, waterClamp, setWireframe: on => { MAT.wireframe = on; } }
+return { hit, startPos, safeNear, update, prime, setCfg, reseed, setVD, vd: () => VD, CS, tH, SEA, GEN, chunks, queue, nearestIsland, setWireframe: on => { MAT.wireframe = on; } }
 })(ilhasRoot);

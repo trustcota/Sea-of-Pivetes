@@ -287,9 +287,10 @@ function loop(now) {
   const vwx = WI.wsp * Math.sin(wang), vwz = WI.wsp * Math.cos(wang);
 
   const sw = clamp(.55 * s + .6 * WI.s, 0, 1);
-  SEAS.amp = .1 + 1.5 * Math.pow(sw, 1.6);
-  SEAS.st = .2 + .18 * sw;
-  SEAS.chop = .04 + .45 * sw;
+  const waveScale = s === 0 ? 0 : Math.min(1.0, s / 0.04);
+  SEAS.amp = waveScale * (.1 + 1.5 * Math.pow(sw, 1.6));
+  SEAS.st = waveScale * (.2 + .18 * sw);
+  SEAS.chop = waveScale * (.04 + .45 * sw);
   SEAS.wt += dt * (.5 + .6 * sw);
   setWaveDir(wang);
 
