@@ -132,8 +132,11 @@ export const SH = (() => {
     // Lanternas Laterais (atrás das escadas, assentadas diretamente sobre a amurada lateral em Y = 0.95)
     addLantern(s * 1.82, 1.11, 1.2, s, 'Lateral (' + sideName + ')');
   }
-  const wh = new T.Group(), whm = []; wh.position.set(.75, 2.15, -4.0); ship.add(wh);
-  box(.36, 1, .36, wood, .75, 1.7, -4.0);
+  const wh = new T.Group(), whm = []; wh.position.set(0, 2.05, -4.12); ship.add(wh);
+  // Pedestal de suporte do leme localizado à frente do timão (em direção aos mastros)
+  box(.32, .95, .22, dark, 0, 1.68, -3.85);
+  // Eixo metálico conector do leme ao suporte
+  cyl(.07, .07, .32, 8, iron, 0, 2.05, -3.98).rotation.x = Math.PI / 2;
   whm.push(own(add(new T.TorusGeometry(.5, .06, 4, 12), wood, 0, 0, 0, wh)));
   const hub = own(cyl(.12, .12, .2, 8, gold, 0, 0, 0, wh)); hub.rotation.x = Math.PI / 2; whm.push(hub);
   for (let k = 0; k < 4; k++) { const sp = own(box(.07, 1.4, .07, wood, 0, 0, 0, wh)); sp.rotation.z = k * Math.PI / 4; whm.push(sp) }
@@ -431,7 +434,7 @@ export const SH = (() => {
     if (ax > .45 && ax < 1.35 && z < -1.35) return .35 + .28 * (Math.min(2, Math.floor((-1.35 - z) / .3)) + 1);
     if (ax < .6 && Math.abs(z + .9) < .6) return .49; return .35
   };
-  const ob = [[0, 2.2, .34], [0, .2, .36], [0, -3.3, .29], [.75, -4.0, .55], [-1.2, -5.7, .22], [1.2, -5.7, .22], [1.25, 2.1, .3], [-1.25, 2.1, .3]];
+  const ob = [[0, 2.2, .34], [0, .2, .36], [0, -3.3, .29], [0, -4.0, .55], [-1.2, -5.7, .22], [1.2, -5.7, .22], [1.25, 2.1, .3], [-1.25, 2.1, .3]];
   const walk = {
     g: gy, ok: (x, z, px, pz) => {
       if (z < -5.7 || z > 4.3) return 0; const y = gy(x, z); if (y - gy(px, pz) > .45 || Math.abs(x) > edge(z, y) - .22) return 0;
@@ -445,7 +448,7 @@ export const SH = (() => {
   for (const k of [1, -1]) { const a = box(.75, .12, .12, iron, k * .3, -.62, 0, anc); a.rotation.z = -k * .6; box(.2, .2, .14, iron, k * .62, -.38, 0, anc) }
   const arope = cyl(.04, .04, 1, 5, rp, .88, 1, 3.9); arope.frustumCulled = false;
   inter.push({ t: 'anchor', pos: V(0, .35, 2.2), label: 'Âncora (cabrestante)' });
-  inter.push({ t: 'helm', pos: V(.75, 2.15, -4.0), label: 'Leme' });
+  inter.push({ t: 'helm', pos: V(0, 2.05, -4.12), label: 'Leme' });
   return { ship, fl, mats, sails, rigs, walk, inter, wh, helm: HM, anc, arope, cap, lad: LD, ladders, whg: whm.map(o => G(o, 'h')), lanterns }
 })();
 

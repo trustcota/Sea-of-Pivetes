@@ -76,7 +76,7 @@ export function updShipPhysics(dt, sw, gu, wang, vwx, vwz) {
 
   // Vento + dinâmica: vento por altura, sustentação, estol, deriva, leme, banda
   HM.a += (HM.t - HM.a) * (1 - Math.exp(-dt * 3));
-  SH.wh.rotation.z = HM.a * 1.6;
+  SH.wh.rotation.z = -HM.a * 1.6;
 
   const wlx = vwx * ch - vwz * sh, wlz = vwx * sh + vwz * ch;
   const ax = wlx - ST.sw, az = wlz - ST.v;
