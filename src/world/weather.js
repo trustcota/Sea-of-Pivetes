@@ -28,15 +28,15 @@ export const rain = new T.LineSegments(rg, new T.LineBasicMaterial({ color: 0xbf
 rain.frustumCulled = false;
 sc.add(rain);
 
-// Riscos de vento: partículas de ar levadas pelo vento aparente
-const NSK = 260, skA = new Float32Array(NSK * 3), skP = new Float32Array(NSK * 6), skG = new T.BufferGeometry();
+// Riscos de vento: partículas de ar levadas pelo vento aparente (estilo Sea of Thieves)
+const NSK = 65, skA = new Float32Array(NSK * 3), skP = new Float32Array(NSK * 6), skG = new T.BufferGeometry();
 for (let i = 0; i < NSK; i++) {
   skA[i * 3] = rnd(-50, 50);
-  skA[i * 3 + 1] = rnd(.8, 26);
+  skA[i * 3 + 1] = rnd(2.0, 22.0); // Mantém as partículas flutuando em uma boa altitude visual
   skA[i * 3 + 2] = rnd(-50, 50);
 }
 skG.setAttribute('position', new T.BufferAttribute(skP, 3));
-export const skM = new T.LineSegments(skG, new T.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: .25, fog: false }));
+export const skM = new T.LineSegments(skG, new T.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: .12, fog: false }));
 skM.frustumCulled = false;
 sc.add(skM);
 
@@ -334,57 +334,102 @@ export const vn = (x, z) => {
   return (h1(i, j) * (1 - a) + h1(i + 1, j) * a) * (1 - b) + (h1(i, j + 1) * (1 - a) + h1(i + 1, j + 1) * a) * b;
 };
 
-// Sol low poly: núcleo facetado + raios triangulares + halos poligonais; alinhado à luz direcional (sunL)
-export const sunG = new T.Group(), rays = new T.Group(), SO = [1, .95, .3, .13], sunMat = [];
-{
-  const g = new T.IcosahedronGeometry(22, 1), p = g.attributes.position, col = new Float32Array(p.count * 3), n = new T.Vector3(), a = new T.Vector3(), b = new T.Vector3();
-  for (let f = 0; f < p.count / 3; f++) {
-    a.fromBufferAttribute(p, f * 3 + 1).sub(b.fromBufferAttribute(p, f * 3));
-    n.fromBufferAttribute(p, f * 3 + 2).sub(b).cross(a).normalize();
-    const sh = clamp(.86 + .14 * Math.abs(n.z) + .05 * Math.sin(f * 7.3), .7, 1);
-    for (let v = 0; v < 3; v++) col.set([sh, .95 * sh, .62 * sh], (f * 3 + v) * 3);
-  }
-  g.setAttribute('color', new T.BufferAttribute(col, 3));
-  sunMat.push(new T.MeshBasicMaterial({ vertexColors: true, fog: false, transparent: true }));
-  sunG.add(new T.Mesh(g, sunMat[0]));
-}
-sunMat.push(new T.MeshBasicMaterial({ color: 0xffe27a, fog: false, transparent: true }));
-for (let i = 0; i < 12; i++) {
-  const r = new T.Group(), o = i % 2, c = new T.Mesh(new T.ConeGeometry(o ? 3.4 : 4.6, o ? 15 : 24, 3), sunMat[1]);
-  c.position.y = o ? 36 : 40;
-  r.add(c);
-  r.rotation.z = i * Math.PI / 6;
-  rays.add(r);
-}
-sunG.add(rays);
-for (const [rad, seg, z] of [[62, 12, -1], [110, 10, -2]]) {
-  const m = new T.MeshBasicMaterial({ color: 0xffd86a, fog: false, transparent: true, blending: T.AdditiveBlending, depthWrite: false });
-  sunMat.push(m);
-  const h = new T.Mesh(new T.CircleGeometry(rad, seg), m);
-  h.position.z = z;
-  sunG.add(h);
-}
+// Sol e Lua low poly removidos visualmente (mantidos grupos vazios apenas para evitar erros de referência de imports)
+export const sunG = new T.Group(), rays = new T.Group(), SO = [0, 0, 0, 0], sunMat = [
+  new T.MeshBasicMaterial({ transparent: true, opacity: 0 }),
+  new T.MeshBasicMaterial({ transparent: true, opacity: 0 }),
+  new T.MeshBasicMaterial({ transparent: true, opacity: 0 }),
+  new T.MeshBasicMaterial({ transparent: true, opacity: 0 })
+];
 sunG.frustumCulled = false;
 sunG.traverse(o => o.frustumCulled = false);
-sc.add(sunG);
+// sc.add(sunG); -- Removido da cena por completo
+
+// Tabela de Keyframes de 24 horas para o tempo limpo
+export const CelestialKeyframes = [
+  { t: 0.0,  sky: 0x010307, fog: 0x010204, light: 0xa5c5ff, lightInt: 0.12, isMoon: true,  hemiS: 0x050d1a, hemiG: 0x010204, hemiInt: 0.12, fogDens: 0.015 },
+  { t: 4.5,  sky: 0x010307, fog: 0x010204, light: 0xa5c5ff, lightInt: 0.12, isMoon: true,  hemiS: 0x050d1a, hemiG: 0x010204, hemiInt: 0.12, fogDens: 0.015 },
+  { t: 5.2,  sky: 0x0e0d1f, fog: 0x22132b, light: 0xff6220, lightInt: 0.10, isMoon: true,  hemiS: 0x141026, hemiG: 0x050510, hemiInt: 0.15, fogDens: 0.016 },
+  { t: 5.8,  sky: 0x182a4d, fog: 0xd95032, light: 0xff6e30, lightInt: 0.35, isMoon: false, hemiS: 0x3d436b, hemiG: 0x1a0a06, hemiInt: 0.35, fogDens: 0.018 },
+  { t: 6.3,  sky: 0x225ea0, fog: 0xff9a45, light: 0xffaa40, lightInt: 0.70, isMoon: false, hemiS: 0x5a7ab3, hemiG: 0x382218, hemiInt: 0.55, fogDens: 0.017 },
+  { t: 7.0,  sky: 0x268ee8, fog: 0xc2e0ff, light: 0xfff2ce, lightInt: 0.95, isMoon: false, hemiS: 0xffffff, hemiG: 0x1b5a78, hemiInt: 0.65, fogDens: 0.014 },
+  { t: 12.0, sky: 0x268ee8, fog: 0xc2e0ff, light: 0xfffbf0, lightInt: 1.00, isMoon: false, hemiS: 0xffffff, hemiG: 0x1b5a78, hemiInt: 0.65, fogDens: 0.013 },
+  { t: 16.5, sky: 0x247ec6, fog: 0xddeeff, light: 0xffeed0, lightInt: 0.95, isMoon: false, hemiS: 0xffffff, hemiG: 0x1b5a78, hemiInt: 0.65, fogDens: 0.013 },
+  { t: 17.2, sky: 0x1a4982, fog: 0xff9e3d, light: 0xff9020, lightInt: 0.80, isMoon: false, hemiS: 0x5d7ab8, hemiG: 0x3a251a, hemiInt: 0.55, fogDens: 0.016 },
+  { t: 17.8, sky: 0x3b144d, fog: 0xe83b10, light: 0xff4f08, lightInt: 0.50, isMoon: false, hemiS: 0x482b6b, hemiG: 0x290c05, hemiInt: 0.40, fogDens: 0.018 },
+  { t: 18.3, sky: 0x19102b, fog: 0x4a1438, light: 0xc02008, lightInt: 0.20, isMoon: false, hemiS: 0x22133b, hemiG: 0x100517, hemiInt: 0.25, fogDens: 0.017 },
+  { t: 19.0, sky: 0x050814, fog: 0x0a0c1a, light: 0x88adff, lightInt: 0.10, isMoon: true,  hemiS: 0x0b1329, hemiG: 0x03050d, hemiInt: 0.15, fogDens: 0.015 },
+  { t: 21.0, sky: 0x010307, fog: 0x010204, light: 0xa5c5ff, lightInt: 0.12, isMoon: true,  hemiS: 0x050d1a, hemiG: 0x010204, hemiInt: 0.12, fogDens: 0.015 },
+  { t: 24.0, sky: 0x010307, fog: 0x010204, light: 0xa5c5ff, lightInt: 0.12, isMoon: true,  hemiS: 0x050d1a, hemiG: 0x010204, hemiInt: 0.12, fogDens: 0.015 }
+];
+
+const cTemp1 = new THREE.Color();
+const cTemp2 = new THREE.Color();
+
+export function getCelestialFrame(time) {
+  let i1 = 0, i2 = 1;
+  for (let i = 0; i < CelestialKeyframes.length - 1; i++) {
+    if (time >= CelestialKeyframes[i].t && time <= CelestialKeyframes[i + 1].t) {
+      i1 = i;
+      i2 = i + 1;
+      break;
+    }
+  }
+
+  const k1 = CelestialKeyframes[i1];
+  const k2 = CelestialKeyframes[i2];
+  const f = (time - k1.t) / (k2.t - k1.t);
+
+  const skyVal = new THREE.Color(k1.sky).lerp(cTemp1.setHex(k2.sky), f);
+  const fogVal = new THREE.Color(k1.fog).lerp(cTemp1.setHex(k2.fog), f);
+  const lightVal = new THREE.Color(k1.light).lerp(cTemp1.setHex(k2.light), f);
+  const lightInt = k1.lightInt + (k2.lightInt - k1.lightInt) * f;
+  
+  const hemiS = new THREE.Color(k1.hemiS).lerp(cTemp1.setHex(k2.hemiS), f);
+  const hemiG = new THREE.Color(k1.hemiG).lerp(cTemp1.setHex(k2.hemiG), f);
+  const hemiInt = k1.hemiInt + (k2.hemiInt - k1.hemiInt) * f;
+  const fogDens = k1.fogDens + (k2.fogDens - k1.fogDens) * f;
+  const isMoon = f < 0.5 ? k1.isMoon : k2.isMoon;
+
+  return { sky: skyVal, fog: fogVal, light: lightVal, lightInt, isMoon, hemiS, hemiG, hemiInt, fogDens };
+}
 
 export function updSun(dt) {
-  const isDay = S.time >= 5.0 && S.time <= 19.0;
-  const sunVis = isDay ? (S.time < 6.0 ? (S.time - 5.0) : S.time > 18.0 ? (19.0 - S.time) : 1.0) : 0;
+  const celestial = getCelestialFrame(S.time);
   const occ = cloudState.sunOcclusion;
-  const finalSunVis = Math.max(0, sunVis) * (1 - 0.72 * occ);
-  sunG.visible = finalSunVis > .01;
-  if (!sunG.visible) return;
 
-  const sunAngle = ((S.time - 6.0) / 12.0) * Math.PI;
+  let vis = 0;
+  if (!celestial.isMoon) {
+    vis = S.time >= 5.0 && S.time <= 19.0 ? (S.time < 6.0 ? (S.time - 5.0) : S.time > 18.0 ? (19.0 - S.time) : 1.0) : 0;
+  } else {
+    let moonTime = S.time < 6.0 ? S.time + 24.0 : S.time;
+    vis = moonTime >= 17.0 && moonTime <= 30.0 ? (moonTime < 18.0 ? (moonTime - 17.0) : moonTime > 29.0 ? (30.0 - moonTime) : 1.0) : 0;
+  }
+
+  const finalVis = Math.max(0, vis) * (1 - 0.72 * occ);
+  sunG.visible = finalVis > .01;
+
+  let angle = 0;
+  let maxAltitude = 70;
+  if (!celestial.isMoon) {
+    angle = ((S.time - 6.0) / 12.0) * Math.PI;
+    maxAltitude = 70;
+  } else {
+    let moonTime = S.time < 6.0 ? S.time + 24.0 : S.time;
+    angle = ((moonTime - 18.0) / 12.0) * Math.PI;
+    maxAltitude = 55;
+  }
+
   const sunDist = 90;
-  const sunX = ST.px - Math.cos(sunAngle) * sunDist;
-  const sunY = Math.sin(sunAngle) * 70;
+  const sunX = ST.px - Math.cos(angle) * sunDist;
+  const sunY = Math.sin(angle) * maxAltitude;
   const sunZ = ST.pz - 50;
 
   sunL.position.set(sunX, Math.max(5, sunY), sunZ);
   sunL.target.position.set(ST.px, 0, ST.pz);
   sunL.target.updateMatrixWorld();
+
+  if (!sunG.visible) return;
 
   sunG.position.copy(sunL.position).multiplyScalar(3);
   cam.getWorldPosition(wp);
@@ -392,39 +437,45 @@ export function updSun(dt) {
   const k = performance.now() * .001;
   rays.rotation.z += dt * .06;
 
-  const isTwilight = (S.time >= 5.0 && S.time <= 7.0) || (S.time >= 17.0 && S.time <= 19.0);
-  if (isTwilight) {
-    sunMat[0].color.setRGB(1, 0.6, 0.2);
+  if (celestial.isMoon) {
+    rays.visible = false;
+    sunMat[0].color.setHex(0xeef4ff);
+    sunMat[0].opacity = 0.9 * finalVis;
+    sunMat[1].opacity = 0;
+    sunMat[2].color.setHex(0x88adff);
+    sunMat[2].opacity = 0.15 * finalVis;
+    sunMat[3].color.setHex(0x5588ff);
+    sunMat[3].opacity = 0.08 * finalVis;
   } else {
-    sunMat[0].color.setRGB(1, 0.95, 0.8);
+    rays.visible = true;
+    const isTwilight = (S.time >= 5.0 && S.time <= 7.0) || (S.time >= 17.0 && S.time <= 19.0);
+    if (isTwilight) {
+      sunMat[0].color.setRGB(1, 0.55, 0.15);
+    } else {
+      sunMat[0].color.setRGB(1, 0.95, 0.8);
+    }
+
+    sunMat[1].color.setHex(0xffe27a);
+    sunMat[2].color.setHex(0xffd86a);
+    sunMat[3].color.setHex(0xffd86a);
+
+    for (let i = 0; i < 4; i++) {
+      const baseOp = SO[i] * finalVis;
+      sunMat[i].opacity = baseOp * (i > 1 ? 1 + .12 * Math.sin(k * 1.7 + i) : 1);
+    }
   }
 
-  for (let i = 0; i < 4; i++) {
-    const baseOp = SO[i] * finalSunVis;
-    sunMat[i].opacity = baseOp * (i > 1 ? 1 + .12 * Math.sin(k * 1.7 + i) : 1);
-  }
   const occScale = 1 - 0.25 * occ;
-  sunG.scale.setScalar((1 + .025 * Math.sin(k * 1.3)) * occScale);
+  sunG.scale.setScalar((celestial.isMoon ? 0.8 : 1.0) * (1 + .025 * Math.sin(k * 1.3)) * occScale);
 }
 
 export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
-  let night = 0.0;
-  if (S.time >= 7.0 && S.time <= 17.0) {
-    night = 0.0;
-  } else if (S.time > 17.0 && S.time < 19.0) {
-    night = (S.time - 17.0) / 2.0;
-  } else if (S.time >= 19.0 || S.time < 5.0) {
-    night = 1.0;
-  } else if (S.time >= 5.0 && S.time < 7.0) {
-    night = 1.0 - ((S.time - 5.0) / 2.0);
-  }
-
-  const visualS = clamp(Math.max(s, night * 0.85), 0, 1);
+  const celestial = getCelestialFrame(S.time);
 
   // Raios e tempestade
   LT.flash = Math.max(0, LT.flash - dt * 2.6);
   const ff = LT.flash * (.65 + .35 * Math.sin(now * .07));
-  if (visualS > .72) {
+  if (s > .72) {
     LT.nl -= dt;
     if (LT.nl < 0) {
       strike();
@@ -434,23 +485,40 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   if (LT.flash < .02) bolt.visible = false;
 
   // Céu, neblina e luzes
-  c3(SKY, visualS, sky);
-  sky.lerp(WH, ff * .5);
-  sc.fog.color.copy(sky);
-  const vdFactor = Math.max(1, (ILHAS && ILHAS.vd ? ILHAS.vd() : 2) / 2);
-  sc.fog.density = m3([.013, .017, .027], visualS) / vdFactor;
+  const skyColor = celestial.sky.clone();
+  const fogColor = celestial.fog.clone();
 
-  // Oclusão solar atenua luz direta do sol e luz secundária
+  skyColor.lerp(cTemp1.setHex(0x16222a), s);
+  fogColor.lerp(cTemp1.setHex(0x121d24), s);
+
+  skyColor.lerp(WH, ff * .4);
+  fogColor.lerp(WH, ff * .5);
+
+  sky.copy(skyColor);
+  sc.fog.color.copy(fogColor);
+
+  const baseDens = celestial.fogDens + (0.027 - celestial.fogDens) * s;
+  const vdFactor = Math.max(1, (ILHAS && ILHAS.vd ? ILHAS.vd() : 2) / 2);
+  sc.fog.density = baseDens / vdFactor;
+
   const occ = cloudState.sunOcclusion;
-  const baseSunInt = m3([.95, .55, .1], visualS) * (1 - night * 0.95);
-  sunL.intensity = baseSunInt * (1 - 0.6 * occ);
+  const stormLightMultiplier = 1.0 - s * 0.85;
+
+  sunL.color.copy(celestial.light);
+  sunL.intensity = celestial.lightInt * (1 - 0.6 * occ) * stormLightMultiplier;
+  key.color.copy(celestial.light);
   key.intensity = sunL.intensity * .4;
-  hemi.intensity = (m3([.62, .5, .32], visualS) + ff * 1.6) * (1 - 0.18 * occ) * (1 - night * 0.7);
+
+  hemi.color.copy(celestial.hemiS).lerp(cTemp1.setHex(0x323e46), s);
+  hemi.groundColor.copy(celestial.hemiG).lerp(cTemp1.setHex(0x1a2126), s);
+  hemi.intensity = (celestial.hemiInt * (1.0 - s * 0.45) + ff * 1.6) * (1 - 0.18 * occ);
+  
   fLight.intensity = ff * 2.2;
 
-  // Lanternas quentes de popa acendem no crepúsculo/tempestade
+  // Lanternas quentes de popa acendem no crepúsculo/tempestade/noite
   if (SH.lanternLights) {
-    const lInt = Math.max(.2, (s - .2) * 1.8) + ff * 1.2;
+    const nightLanternFactor = celestial.isMoon ? 0.85 : 0.0;
+    const lInt = Math.max(.2, (s - .2) * 1.8) + ff * 1.2 + nightLanternFactor;
     SH.lanternLights.forEach(l => l.intensity = lInt * (1 + .08 * Math.sin(now * .008)));
   }
 
@@ -496,8 +564,9 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   cam.getWorldPosition(wp);
   rain.position.set(wp.x, 0, wp.z);
 
-  // Riscos de vento
-  const am = Math.hypot(avx, avz) + .001, tl = Math.min(1.8, .25 + am * .07);
+  // Riscos de vento (estilo Sea of Thieves: brisas mais longas, suaves e espaçadas de tempos em tempos)
+  const am = Math.hypot(avx, avz) + .001, tl = Math.min(2.5, .35 + am * .08);
+  const windWave = 0.4 + 0.6 * Math.sin(now * 0.0006); // Onda senoidal lenta para vinda/ida das brisas
   for (let i = 0; i < NSK; i++) {
     const o = i * 3;
     let x = skA[o] + avx * dt, z = skA[o + 2] + avz * dt;
@@ -513,8 +582,9 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
     skP[j + 4] = y;
     skP[j + 5] = z - avz / am * tl;
   }
-  skG.setDrawRange(0, Math.floor(NSK * clamp(.3 + WI.s, 0, 1)) * 2);
+  const activeLines = Math.floor(NSK * clamp(0.1 + WI.s * 0.4, 0, 1) * (0.2 + 0.8 * windWave));
+  skG.setDrawRange(0, activeLines * 2);
   skG.attributes.position.needsUpdate = true;
   skM.position.set(wp.x, 0, wp.z);
-  skM.material.opacity = .1 + .28 * clamp(WI.wsp / 12, 0, 1);
+  skM.material.opacity = (0.04 + 0.12 * clamp(WI.wsp / 12, 0, 1)) * windWave;
 }

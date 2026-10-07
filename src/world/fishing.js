@@ -3,6 +3,7 @@ import { clamp, wrapA } from '../core/math.js';
 import { cam, sc, cv } from '../core/renderer.js';
 import { ST, CAM, GAME, fp } from '../core/state.js';
 import { H } from './ocean.js';
+import { ILHAS } from './archipelago.js';
 import { SPC, buildFish, swim, createArticulatedFishMesh } from './fish.js';
 
 const T = THREE;
@@ -536,6 +537,8 @@ export class FishingSystem {
     this.to.set(this.camWorldPos.x + this.dx * this.castDist, 0, this.camWorldPos.z + this.dz * this.castDist);
     this.fishPos.copy(this.to);
     this.lineLength = this.castDist;
+    this.landedType = 'water';
+    this.landedY = 0;
   }
 
   startReel(f) {

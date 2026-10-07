@@ -160,10 +160,13 @@ export function updSea(s) {
 
   let sunDirX = -0.5, sunDirY = 0.7, sunDirZ = -0.5;
   if (sunL && sunL.position) {
-    const sl = Math.hypot(sunL.position.x, sunL.position.y, sunL.position.z) || 1;
-    sunDirX = sunL.position.x / sl;
-    sunDirY = sunL.position.y / sl;
-    sunDirZ = sunL.position.z / sl;
+    const dx = sunL.position.x - ST.px;
+    const dy = sunL.position.y;
+    const dz = sunL.position.z - ST.pz;
+    const sl = Math.hypot(dx, dy, dz) || 1;
+    sunDirX = dx / sl;
+    sunDirY = dy / sl;
+    sunDirZ = dz / sl;
   }
 
   const camPosX = cam.position.x;

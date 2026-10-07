@@ -404,10 +404,30 @@ export function setupUI(actions = {}) {
     S.t = +b.dataset.s;
     if (sl) sl.value = S.t * 100;
     setWindStr(.12 + .85 * S.t);
+    const modalSl = $('modal-sl');
+    if (modalSl) {
+      modalSl.value = Math.round(S.t * 100);
+      const valEl = $('modal-sl-val');
+      if (valEl) valEl.textContent = Math.round(S.t * 100) + '%';
+    }
+    modalSeaBtns.forEach(sb => sb.classList.toggle('on', Math.abs(+sb.dataset.modalSea - S.t) < 0.05));
+    SETTINGS.oceanCondition = S.t;
+    SETTINGS.waveIntensity = Math.round(S.t * 100);
+    saveSettingsState();
   });
   if (sl) sl.oninput = () => {
     S.t = sl.value / 100;
     setWindStr(.12 + .85 * S.t);
+    const modalSl = $('modal-sl');
+    if (modalSl) {
+      modalSl.value = sl.value;
+      const valEl = $('modal-sl-val');
+      if (valEl) valEl.textContent = sl.value + '%';
+    }
+    modalSeaBtns.forEach(sb => sb.classList.toggle('on', Math.abs(+sb.dataset.modalSea - S.t) < 0.05));
+    SETTINGS.oceanCondition = S.t;
+    SETTINGS.waveIntensity = +sl.value;
+    saveSettingsState();
   };
 
   const ar = $('ar'), wf = $('wf');

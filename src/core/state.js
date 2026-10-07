@@ -60,9 +60,9 @@ export const SETTINGS = Object.assign({
   showFps: true
 }, savedSettings);
 
-// Garante que o jogo sempre inicia em estado Calmo por padrão e vento normalizado
-if (SETTINGS.oceanCondition > 0.5) SETTINGS.oceanCondition = 0.01;
-if (SETTINGS.waveIntensity > 50) SETTINGS.waveIntensity = 1;
+// Garante que o jogo sempre inicia em 1% o balanço das ondas por padrão e vento normalizado
+SETTINGS.oceanCondition = 0.01;
+SETTINGS.waveIntensity = 1;
 if (SETTINGS.windStrength > 1.0) SETTINGS.windStrength = SETTINGS.windStrength / 100;
 if (SETTINGS.windStrength > 1.0 || SETTINGS.windStrength < 0) SETTINGS.windStrength = 0.15;
 

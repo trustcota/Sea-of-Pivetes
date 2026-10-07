@@ -274,6 +274,7 @@ function loop(now) {
   S.time = (S.time + dt * 0.04) % 24;
 
   S.c += (S.t - S.c) * (1 - Math.exp(-dt * 1.1));
+  if (Math.abs(S.c - S.t) < 0.0001) S.c = S.t;
   const s = S.c;
 
   // Vento: direção/força suavizadas + rajadas

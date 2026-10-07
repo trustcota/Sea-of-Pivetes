@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { sc } from '../core/renderer.js';
+import { SEAS } from '../core/state.js';
 
 const T = THREE;
 
@@ -244,7 +245,9 @@ function shoreClamp(x, z, rawY) {
     const damp = Math.max(0.0, Math.min(1.0, depth / 2.2));
     let y = rawY * damp;
     if (estH >= -0.1) {
-      y = Math.min(y, -0.35 - estH * 0.5);
+      const ampFactor = Math.min(1.0, (SEAS && SEAS.amp !== undefined ? SEAS.amp : 0.1) * 5.0);
+      const limit = -0.35 - estH * 0.5;
+      y = Math.min(y, y * (1.0 - ampFactor) + limit * ampFactor);
     }
     return y;
   }
