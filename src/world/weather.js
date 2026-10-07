@@ -424,7 +424,7 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   // Raios e tempestade
   LT.flash = Math.max(0, LT.flash - dt * 2.6);
   const ff = LT.flash * (.65 + .35 * Math.sin(now * .07));
-  if (visualS > .72) {
+  if (s > .72) {
     LT.nl -= dt;
     if (LT.nl < 0) {
       strike();

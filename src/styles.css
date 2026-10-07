@@ -1682,20 +1682,106 @@ body.touch-device #ginc.on {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  color: var(--ink);
+  color: #fff;
   font: 600 15px/1.35 'JetBrains Mono', monospace;
-  text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
   z-index: 2000;
 }
-#fishing-top { position: absolute; left: 12px; top: calc(12px + env(safe-area-inset-top, 0px)); }
-#fishing-sel { display: none; }
-#fishing-hint { position: absolute; left: 12px; right: 12px; bottom: calc(52px + env(safe-area-inset-bottom, 0px)); text-align: center; color: var(--on); background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 4px; }
-.fishing-bar { position: absolute; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); width: min(320px,70vw); height: 12px; transform: translateX(-50%); background: var(--wood); border: 2px solid var(--line); border-radius: 6px; overflow: hidden; opacity: 0; transition: opacity .15s; }
-#fishing-pwb { bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
-#fishing-tnb { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); border-color: var(--crimson); }
-#fishing-sbb { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); height: 7px; width: min(220px,50vw); border-color: #6fe0a0; }
-.fishing-bar i { display: block; height: 100%; width: 0; background: var(--acc); }
-#fishing-arw { display: none !important; }
+#fishing-hint {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  color: #fff;
+  font-weight: 700;
+  background: rgba(18, 12, 8, 0.75);
+  border: 2px solid var(--line);
+  padding: 6px 12px;
+  border-radius: 6px;
+  max-width: 540px;
+  margin: 0 auto;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+}
+.fishing-bar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  width: min(320px, 70vw);
+  height: 12px;
+  transform: translateX(-50%);
+  background: rgba(28, 18, 12, 0.85);
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity .15s;
+}
+#fishing-pwb {
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+}
+#fishing-tnb {
+  bottom: calc(44px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(90deg, rgba(28, 18, 12, 0.85) 85%, rgba(229, 72, 61, 0.5) 85%);
+  border-color: var(--crimson);
+}
+#fishing-sbb {
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  height: 7px;
+  width: min(220px, 50vw);
+  border-color: #6fe0a0;
+}
+.fishing-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--acc);
+}
+#fishing-sbf {
+  background: #6fe0a0 !important;
+}
+
+#fishing-arw {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  font: 800 clamp(56px, 14vw, 110px)/1 system-ui, sans-serif;
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0;
+  text-shadow: 0 2px 14px rgba(0,0,0,0.9);
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+#fishing-arw small {
+  display: block;
+  margin-top: 8px;
+  font: 700 16px 'JetBrains Mono', monospace;
+  letter-spacing: 0;
+  text-shadow: 0 2px 6px #000;
+}
+#fishing-arw.t {
+  color: #ffd24a;
+  opacity: 1;
+  animation: fishing-bl .7s ease-in-out infinite alternate;
+}
+#fishing-arw.on {
+  color: var(--crimson);
+  opacity: 1;
+  animation: fishing-bl .35s ease-in-out infinite alternate;
+}
+#fishing-arw.ok {
+  color: #6fe0a0;
+  opacity: 1;
+}
+#fishing-arw.L { left: 28%; }
+#fishing-arw.R { left: 72%; }
+
+@keyframes fishing-bl {
+  from { opacity: 1; }
+  to { opacity: 0.15; }
+}
 
 /* =========================================================================
    BESTIÁRIO - O LIVRO DO NAVEGADOR (DIÁRIO DE CAMPO)

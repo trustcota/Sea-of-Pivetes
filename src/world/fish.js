@@ -217,19 +217,37 @@ export function buildFish(S_in) {
  * Propaga a onda senoidal através da espinha, nadadeiras e mandíbula
  */
 export function swim(o, T, x = 1, a = 1) {
-  const S = o.S;
-  const n = S.n;
-  const w = T * S.sp * x;
-  o.pv.forEach((p, i) => {
-    p.rotation.y = a * S.am * Math.pow(i / (n - 1), S.st) * Math.sin(w - i * S.ph);
-  });
-  o.tl.rotation.y = a * S.am * 2.2 * Math.sin(w - n * S.ph);
-  o.rip.forEach(([m, i]) => {
-    m.rotation.x = .12 * Math.sin(w - i * S.ph * 1.4);
-  });
-  o.pf.forEach(([h, s]) => {
-    h.rotation.x = s * (Math.PI / 2 + S.dr + S.fl * Math.sin(w * .6));
-  });
+  if (!o || !o.S) return;
+  const S = Object.assign({}, DEF, o.S);
+  const n = S.n || 8;
+  const sp = S.sp || 5;
+  const w = T * sp * x;
+  const am = S.am || 0.09;
+  const st = S.st || 1;
+  const ph = S.ph || 0.55;
+  const dr = S.dr !== undefined ? S.dr : 0.35;
+  const fl = S.fl !== undefined ? S.fl : 0.25;
+
+  if (o.pv && o.pv.length) {
+    const totalSegs = o.pv.length;
+    o.pv.forEach((p, i) => {
+      const segRatio = totalSegs > 1 ? i / (totalSegs - 1) : 0;
+      p.rotation.y = a * am * Math.pow(segRatio, st) * Math.sin(w - i * ph);
+    });
+  }
+  if (o.tl) {
+    o.tl.rotation.y = a * am * 2.2 * Math.sin(w - n * ph);
+  }
+  if (o.rip) {
+    o.rip.forEach(([m, i]) => {
+      m.rotation.x = .12 * Math.sin(w - i * ph * 1.4);
+    });
+  }
+  if (o.pf) {
+    o.pf.forEach(([h, s]) => {
+      h.rotation.x = s * (Math.PI / 2 + dr + fl * Math.sin(w * .6));
+    });
+  }
   if (o.jv) {
     o.jv.rotation.z = -(.1 + .09 * Math.sin(w * .5));
   }

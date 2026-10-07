@@ -400,6 +400,11 @@ export function closeRadialMenu() {
   if (overlay) {
     overlay.style.display = 'none';
   }
+  
+  // Se o Bestiário estiver aberto, não recapturamos o mouse
+  const bestiary = document.getElementById('bestiary-modal');
+  if (bestiary && bestiary.style.display === 'flex') return;
+
   if (CAM.fpv && GAME.state === 'PLAY') {
     const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.matchMedia("(pointer: coarse)").matches;
     if (!isTouch && cv) {

@@ -51,6 +51,16 @@ export function updShipPhysics(dt, sw, gu, wang, vwx, vwz) {
     g.a += (g.t - g.a) * (1 - Math.exp(-dt * 2.2));
     if (g.piv) g.piv.rotation.y = g.a;
   }
+  
+  // Log de depuração (limitado para evitar inundar o console)
+  if (Math.random() < 0.01) {
+    const wlx = vwx * Math.cos(ST.hd) - vwz * Math.sin(ST.hd);
+    const wlz = vwx * Math.sin(ST.hd) + vwz * Math.cos(ST.hd);
+    console.log('--- Debug Velas ---');
+    console.log('Vento Relativo (dir):', Math.atan2(wlx, wlz) * 180 / Math.PI);
+    SH.rigs.forEach(r => console.log(`Rig ${r.name}: angulo ${ (r.a * 180 / Math.PI).toFixed(1) }`));
+  }
+
   for (const x of SH.sails) {
     x.d += (x.t - x.d) * (1 - Math.exp(-dt * 2.4));
     if (Math.abs(x.t - x.d) < .002) x.d = x.t;

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FISH_SPECIES, swim, createArticulatedFishMesh } from '../world/fish.js';
-import { GAME } from '../core/state.js';
+import { GAME, CAM } from '../core/state.js';
+import { cv } from '../core/renderer.js';
 
 const T = THREE;
 
@@ -18,8 +19,21 @@ export class BestiaryModal {
     this.currentMeshObj = null;
     this.animReqId = null;
     this.animTime = 0;
+    this.lastScrollTime = 0; // Cooldown para o scroll
+    this.scrollCooldown = 400; // ms
 
     this.pages = []; // Estrutura de páginas: [{type: 'intro'}, {type: 'summary'}, {type: 'creature', speciesIdx: N}]
+  }
+  
+  formatTitle(str) {
+    if (!str) return '';
+    const connectors = ['de', 'do', 'da', 'dos', 'das', 'e', 'a', 'o'];
+    return str.toLowerCase().split('-').map(part => {
+      return part.split(' ').map((word, i) => {
+        if (i > 0 && connectors.includes(word)) return word;
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      }).join(' ');
+    }).join('-');
   }
 
   init() {
@@ -35,6 +49,22 @@ export class BestiaryModal {
     if (btnClose) btnClose.onclick = () => this.close();
     if (btnPrev) btnPrev.onclick = () => this.prevPage();
     if (btnNext) btnNext.onclick = () => this.nextPage();
+
+    // Handler global para Scroll (Roda do mouse) - Funciona mesmo com Pointer Lock
+    window.addEventListener('wheel', (e) => {
+      if (!this.modalEl || this.modalEl.style.display !== 'flex') return;
+      
+      const now = Date.now();
+      if (now - this.lastScrollTime < this.scrollCooldown) return;
+      if (Math.abs(e.deltaY) < 5) return; 
+
+      if (e.deltaY > 0) this.nextPage();
+      else this.prevPage();
+      
+      this.lastScrollTime = now;
+      e.preventDefault();
+      e.stopPropagation();
+    }, { passive: false });
 
     this.renderer = new T.WebGLRenderer({
       canvas: this.canvasEl,
@@ -54,14 +84,27 @@ export class BestiaryModal {
   }
 
   buildPages() {
-    this.pages = [{ type: 'intro' }, { type: 'summary' }];
-    this.discoveredIndices = [];
+    this.pages = [{ type: 'intro' }];
     
-    FISH_SPECIES.forEach((sp, idx) => {
-      if (GAME.discoveredSpecies.includes(sp.raw.id)) {
-        this.discoveredIndices.push(idx);
-        this.pages.push({ type: 'creature', speciesIdx: idx });
-      }
+    // Filtra apenas as espécies descobertas
+    const discovered = FISH_SPECIES.filter(sp => GAME.discoveredSpecies.includes(sp.raw.id));
+    
+    // Calcula quantas páginas de sumário são necessárias (8 itens por página para não apertar)
+    const itemsPerPage = 8;
+    const numSummaryPages = Math.max(1, Math.ceil(discovered.length / itemsPerPage));
+    
+    for (let i = 0; i < numSummaryPages; i++) {
+      this.pages.push({ 
+        type: 'summary', 
+        summaryPageIdx: i,
+        items: discovered.slice(i * itemsPerPage, (i + 1) * itemsPerPage) 
+      });
+    }
+    
+    // Adiciona as páginas de detalhes das criaturas
+    discovered.forEach((sp) => {
+      const originalIdx = FISH_SPECIES.findIndex(s => s.id === sp.id);
+      this.pages.push({ type: 'creature', speciesIdx: originalIdx });
     });
   }
 
@@ -69,6 +112,11 @@ export class BestiaryModal {
     if (!this.modalEl) this.init();
     if (!this.modalEl) return;
     
+    // Libera o mouse para permitir clicar no sumário
+    if (document.pointerLockElement) {
+      try { document.exitPointerLock(); } catch (_) {}
+    }
+
     this.buildPages();
     this.modalEl.style.display = 'flex';
     this.currentPageIndex = 0;
@@ -99,6 +147,7 @@ export class BestiaryModal {
 
   renderPage() {
     const page = this.pages[this.currentPageIndex];
+    if (!page) return;
     
     // Elementos de conteúdo
     const elIntro = document.getElementById('bestiary-intro-content');
@@ -124,13 +173,15 @@ export class BestiaryModal {
     } 
     else if (page.type === 'summary') {
       if (elSummary) elSummary.style.display = 'flex';
-      if (elPageNum) elPageNum.textContent = 'Sumário';
-      this.renderSummary();
+      if (elPageNum) elPageNum.textContent = `Sumário (${page.summaryPageIdx + 1})`;
+      this.renderSummary(page.items);
     } 
     else if (page.type === 'creature') {
       if (elSpecies) elSpecies.style.display = 'flex';
       this.showCreature(page.speciesIdx);
-      if (elPageNum) elPageNum.textContent = `Pág. ${this.currentPageIndex - 1}`;
+      // Calcula o número da página baseada em quantas páginas de intro/summary existem
+      const introSummaryCount = this.pages.filter(p => p.type === 'intro' || p.type === 'summary').length;
+      if (elPageNum) elPageNum.textContent = `Pág. ${this.currentPageIndex - introSummaryCount + 1}`;
     }
 
     // Botões
@@ -138,31 +189,39 @@ export class BestiaryModal {
     if (btnNext) btnNext.disabled = this.currentPageIndex === this.pages.length - 1;
   }
 
-  renderSummary() {
+  renderSummary(items) {
     const list = document.getElementById('bestiary-summary-list');
     if (!list) return;
     list.innerHTML = '';
 
-    FISH_SPECIES.forEach((sp, idx) => {
-      const isDiscovered = GAME.discoveredSpecies.includes(sp.raw.id);
+    if (items.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'summary-item locked';
+      empty.innerHTML = '<span class="summary-name">Nenhuma descoberta registrada...</span>';
+      list.appendChild(empty);
+      return;
+    }
+
+    items.forEach((sp) => {
       const item = document.createElement('div');
-      item.className = `summary-item ${isDiscovered ? '' : 'locked'}`;
+      item.className = 'summary-item';
       
-      const name = isDiscovered ? sp.name : 'Espécie Desconhecida';
-      const pageNum = isDiscovered ? (this.pages.findIndex(p => p.speciesIdx === idx) - 1) : '??';
+      // Encontra a página real da criatura
+      const targetPageIndex = this.pages.findIndex(p => p.type === 'creature' && p.speciesIdx === FISH_SPECIES.findIndex(s => s.id === sp.id));
+      const introSummaryCount = this.pages.filter(p => p.type === 'intro' || p.type === 'summary').length;
+      const displayPageNum = targetPageIndex - introSummaryCount + 1;
+      const formattedName = this.formatTitle(sp.name);
 
       item.innerHTML = `
-        <span class="summary-name">${idx + 1}. ${name}</span>
+        <span class="summary-name">${formattedName}</span>
         <span class="summary-dots"></span>
-        <span class="summary-page">${pageNum}</span>
+        <span class="summary-page">${displayPageNum}</span>
       `;
 
-      if (isDiscovered) {
-        item.onclick = () => {
-          this.currentPageIndex = this.pages.findIndex(p => p.speciesIdx === idx);
-          this.renderPage();
-        };
-      }
+      item.onclick = () => {
+        this.currentPageIndex = targetPageIndex;
+        this.renderPage();
+      };
       list.appendChild(item);
     });
   }
@@ -177,8 +236,9 @@ export class BestiaryModal {
     const elSize = document.getElementById('bestiary-size');
     const elHab = document.getElementById('bestiary-hab');
     const elDesc = document.getElementById('bestiary-desc');
+    const elPageNum = document.getElementById('bestiary-page-num');
 
-    if (elName) elName.textContent = sp.name;
+    if (elName) elName.textContent = this.formatTitle(sp.name);
     if (elSci) elSci.textContent = sp.scientificName;
     if (elCat) elCat.textContent = `Categoria: ${sp.category}`;
     if (elSize) elSize.textContent = `Porte: ${sp.sizeRange}`;
@@ -208,6 +268,14 @@ export class BestiaryModal {
     if (this.animReqId) {
       cancelAnimationFrame(this.animReqId);
       this.animReqId = null;
+    }
+
+    // Tenta recapturar o mouse ao fechar o livro se estiver em primeira pessoa
+    if (CAM.fpv && GAME.state === 'PLAY') {
+      const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      if (!isTouch && cv) {
+         try { cv.requestPointerLock(); } catch (_) {}
+      }
     }
   }
 }
