@@ -565,22 +565,29 @@ export class FishingSystem {
     this.triggerEscape('O peixe fugiu!');
   }
 
-  triggerEscape(msg = 'O peixe fugiu!') {
+  triggerEscape(msg = 'O peixe fugiu!', isCalm = false) {
     if (this.state === 'escape') return;
     this.state = 'escape';
     this.escapeTimer = 0;
-    this.escapeDuration = 1.3;
+    this.escapeDuration = isCalm ? 2.5 : 1.3;
     this.escapeReason = msg;
+    this.escapeCalm = isCalm;
     this.say(this.escapeReason, 2.0);
 
-    // Áudio: som de susto com peixe batendo na água e respingo
     Audio.reelStop(false);
-    Audio.play('peixe_agua');
-    Audio.play('splash', { k: 0.85 });
 
-    // Partículas e ondulações de susto no local da isca
-    spawnSplash(this.to.x, this.to.z, 16, 1.2);
-    spawnRipple(this.to.x, this.to.z, 1.6, 2.2);
+    if (!isCalm) {
+      // Áudio: som de susto com peixe batendo na água e respingo
+      Audio.play('peixe_agua');
+      Audio.play('splash', { k: 0.85 });
+
+      // Partículas e ondulações de susto no local da isca
+      spawnSplash(this.to.x, this.to.z, 16, 1.2);
+      spawnRipple(this.to.x, this.to.z, 1.6, 2.2);
+    } else {
+      // Ondulação calma e sutil de partida
+      spawnRipple(this.to.x, this.to.z, 0.8, 1.2);
+    }
 
     // Direção da fuga: acelerando para longe do barco/pescador
     cam.getWorldPosition(this.camWorldPos);
@@ -596,11 +603,16 @@ export class FishingSystem {
     this.escapeDirX = fDirX * cosA - fDirZ * sinA;
     this.escapeDirZ = fDirX * sinA + fDirZ * cosA;
     this.escapeDist = 0;
-    this.escapeSpeed = 2.5;
-    this.escapeAccel = 15.0;
+    if (isCalm) {
+      this.escapeSpeed = 1.0;
+      this.escapeAccel = 0.15;
+    } else {
+      this.escapeSpeed = 2.5;
+      this.escapeAccel = 15.0;
+    }
     this.fishYaw = Math.atan2(-this.escapeDirZ, this.escapeDirX);
 
-    this.flick = 0.8;
+    this.flick = isCalm ? 0.2 : 0.8;
     this.tension = 0;
   }
 
@@ -981,15 +993,29 @@ export class FishingSystem {
 
       // Animação de aproximação: o peixe investiga e nada em curva em direção ao anzol
       const u = 1 - Math.max(0, this.timer / (this.approachDuration || 2));
-      const dist = (1 - u) * 2.2; // Diminui de 2.2m até 0m
-      const ang = this.approachAngle + u * 2.8;
+      
+      let dist, d_dist, c_ang = 2.8;
+      if (this.nibbleCount > 0) {
+        // Nas beliscadas subsequentes, ele não some (não teletransporta)
+        // Ele continua nadando organicamente ao redor da isca (começando em 0 e voltando para 0)
+        c_ang = 4.5;
+        const maxDist = 1.2;
+        dist = 4 * u * (1 - u) * maxDist;
+        d_dist = 4 * (1 - 2 * u) * maxDist;
+      } else {
+        // Primeira aproximação (vem de longe)
+        dist = (1 - u) * 2.2;
+        d_dist = -2.2;
+      }
+
+      const ang = this.approachAngle + u * c_ang;
       const offX = Math.cos(ang) * dist;
       const offZ = Math.sin(ang) * dist;
       this.hang.position.set(offX, -0.65, offZ);
 
-      // Orientação orgânica na direção do deslocamento
-      const vx = -Math.sin(ang) * 2.8 * dist - Math.cos(ang) * 2.2;
-      const vz = Math.cos(ang) * 2.8 * dist - Math.sin(ang) * 2.2;
+      // Orientação orgânica na direção do deslocamento (derivada vetorial)
+      const vx = d_dist * Math.cos(ang) - dist * Math.sin(ang) * c_ang;
+      const vz = d_dist * Math.sin(ang) + dist * Math.cos(ang) * c_ang;
       this.fishYaw = Math.atan2(-vz, vx);
 
       // Pequenas ondulações discretas na superfície durante a investigação
@@ -1034,13 +1060,13 @@ export class FishingSystem {
         if (this.nibbleCount < this.nibbles) {
           // O mesmo peixe continua na água executando a sequência de beliscadas (2 a 5 vezes)
           this.state = 'approach';
-          this.approachDuration = rnd(1.0, 2.2); // Intervalo de espreita entre beliscadas
+          this.approachDuration = rnd(1.5, 2.3); // Intervalo de espreita entre beliscadas
           this.timer = this.approachDuration;
           this.approachAngle = Math.random() * Math.PI * 2;
           this.say('O peixe beliscou e continua rondando...', 1.5);
         } else {
-          // A sequência de beliscadas acabou e o jogador não fisgou: peixe foge assustado
-          this.triggerEscape('O peixe desistiu!');
+          // A sequência de beliscadas acabou e o jogador não fisgou: peixe vai embora calmamente
+          this.triggerEscape('O peixe desistiu!', true);
         }
       }
 
@@ -1058,8 +1084,8 @@ export class FishingSystem {
       this.hang.position.set(offX, -0.65, offZ);
       this.fishYaw = Math.atan2(-this.escapeDirZ, this.escapeDirX);
 
-      // Rastro de esteira na água enquanto o peixe foge acelerado
-      if (this.escapeDist > 0.4 && this.escapeDist < 16.0) {
+      // Rastro de esteira na água enquanto o peixe foge acelerado (apenas se não for fuga calma)
+      if (!this.escapeCalm && this.escapeDist > 0.4 && this.escapeDist < 16.0) {
         spawnLineWake(
           this.to.x + offX,
           this.to.z + offZ,
