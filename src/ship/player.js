@@ -583,7 +583,7 @@ export function updFPV(dt, rows, SL, rrows, hlm) {
   const W = SH.walk, sp = (keys.ShiftLeft || keys.ShiftRight) ? 3.4 : 1.9;
   let f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - joy.dy,
     r = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + joy.dx;
-  if (INT.grab || (fishingSystem && fishingSystem.equipped)) f = r = 0;
+  if (INT.grab) f = r = 0;
   const l = Math.hypot(f, r);
   if (l > 1) { f /= l; r /= l; }
   const sn = Math.sin(fp.yaw), cs = Math.cos(fp.yaw), mvx = (-sn * f + cs * r) * sp, mvz = (-cs * f - sn * r) * sp,

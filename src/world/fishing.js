@@ -166,6 +166,9 @@ export class FishingSystem {
     this.statusMsg = '';
     this.statusTimer = 0;
 
+    this.btnLeftHold = false;
+    this.btnRightHold = false;
+
     // Cache de referências de UI
     this.ui = {
       hud: null,
@@ -181,7 +184,9 @@ export class FishingSystem {
       tnf: null,
       sbb: null,
       sbf: null,
-      btnToggle: null
+      btnToggle: null,
+      btnLeft: null,
+      btnRight: null
     };
 
     // Áudio Web Audio procedural sintetizado
@@ -675,9 +680,13 @@ export class FishingSystem {
     this.bend = 0;
     this.bendVelocity = 0;
     this.statusTimer = 0;
+    this.btnLeftHold = false;
+    this.btnRightHold = false;
     this.line.visible = false;
     this.bob.visible = false;
 
+    if (this.ui.btnLeft) this.ui.btnLeft.classList.remove('visible', 'pulse', 'active');
+    if (this.ui.btnRight) this.ui.btnRight.classList.remove('visible', 'pulse', 'active');
     if (this.ui.hud) this.ui.hud.style.display = 'none';
   }
 
@@ -702,6 +711,8 @@ export class FishingSystem {
     this.ui.btnAction = document.getElementById('fishing-btn-action');
     this.ui.btnLabel = document.getElementById('fishing-btn-label');
     this.ui.btnIcon = document.getElementById('fishing-btn-icon');
+    this.ui.btnLeft = document.getElementById('fishing-btn-left');
+    this.ui.btnRight = document.getElementById('fishing-btn-right');
   }
 
   setupInputs() {
@@ -724,7 +735,7 @@ export class FishingSystem {
         if (!this.equipped || GAME.state !== 'PLAY' || !CAM.fpv) return;
 
         if (this.state === 'catch') {
-          this.finish();
+          this.collectFish();
           return;
         }
         this.hold = this.pressed = 1;
@@ -746,8 +757,49 @@ export class FishingSystem {
       this.ui.btnAction.addEventListener('pointerleave', onActionUp);
     }
 
+    if (this.ui.btnLeft) {
+      const onLeftDown = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.btnLeftHold = true;
+        this.mx = -1.0;
+        if (this.ui.btnLeft) this.ui.btnLeft.classList.add('active');
+      };
+      const onLeftUp = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.btnLeftHold = false;
+        if (this.ui.btnLeft) this.ui.btnLeft.classList.remove('active');
+      };
+      this.ui.btnLeft.addEventListener('pointerdown', onLeftDown);
+      this.ui.btnLeft.addEventListener('pointerup', onLeftUp);
+      this.ui.btnLeft.addEventListener('pointercancel', onLeftUp);
+      this.ui.btnLeft.addEventListener('pointerleave', onLeftUp);
+    }
+
+    if (this.ui.btnRight) {
+      const onRightDown = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.btnRightHold = true;
+        this.mx = 1.0;
+        if (this.ui.btnRight) this.ui.btnRight.classList.add('active');
+      };
+      const onRightUp = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.btnRightHold = false;
+        if (this.ui.btnRight) this.ui.btnRight.classList.remove('active');
+      };
+      this.ui.btnRight.addEventListener('pointerdown', onRightDown);
+      this.ui.btnRight.addEventListener('pointerup', onRightUp);
+      this.ui.btnRight.addEventListener('pointercancel', onRightUp);
+      this.ui.btnRight.addEventListener('pointerleave', onRightUp);
+    }
+
     window.addEventListener('pointerdown', e => {
       if (!this.equipped || GAME.state !== 'PLAY' || !CAM.fpv) return;
+      if (e.pointerType !== 'mouse') return;
       if (e.target.closest('#fishing-btn-action') || e.target.closest('.fishing-action-btn') || e.target.closest('#fishing-sel') || e.target.closest('#settings-modal') || e.target.closest('#controls-modal') || e.target.closest('#radial-orders-overlay') || e.target.closest('.modal-overlay')) return;
       look(e);
       this.hold = this.pressed = 1;
@@ -1129,8 +1181,14 @@ export class FishingSystem {
       this.rod.position.y = S.r ? -.14 : -.22;
     }
 
-    // Suavização do mouse de combate para não travar nas bordas
-    this.mx += (0 - this.mx) * Math.min(1, dt * 1.8);
+    // Suavização do mouse / botões de combate para não travar nas bordas
+    if (this.btnLeftHold) {
+      this.mx = -1.0;
+    } else if (this.btnRightHold) {
+      this.mx = 1.0;
+    } else {
+      this.mx += (0 - this.mx) * Math.min(1, dt * 1.8);
+    }
     this.my += (0 - this.my) * Math.min(1, dt * 1.8);
 
     this.E.set(this.bp.x, this.bp.y + .07, this.bp.z);
@@ -1273,6 +1331,26 @@ export class FishingSystem {
         this.ui.btnIcon.textContent = '🎣';
         this.ui.btnLabel.textContent = 'LANÇAR';
       }
+    }
+
+    // 4. Botões de Combate Lateral no Mobile (Resistir / Contra-Ataque Direcional)
+    const isTouchDev = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.matchMedia("(pointer: coarse)").matches;
+    const isReelFight = this.equipped && this.state === 'reel' && this.fish;
+    const isRunning = isReelFight && this.fish.ph === 2;
+    const fd = isRunning ? (this.fish.fd || 0) : 0;
+
+    if (this.ui.btnLeft) {
+      // Se peixe puxa para a DIREITA (fd === 1), mostra botão ESQUERDO
+      const showLeft = isTouchDev && isRunning && fd === 1;
+      this.ui.btnLeft.classList.toggle('visible', showLeft);
+      this.ui.btnLeft.classList.toggle('pulse', showLeft && !this.btnLeftHold);
+    }
+
+    if (this.ui.btnRight) {
+      // Se peixe puxa para a ESQUERDA (fd === -1), mostra botão DIREITO
+      const showRight = isTouchDev && isRunning && fd === -1;
+      this.ui.btnRight.classList.toggle('visible', showRight);
+      this.ui.btnRight.classList.toggle('pulse', showRight && !this.btnRightHold);
     }
   }
 }
