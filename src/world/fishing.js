@@ -64,7 +64,12 @@ const matCork = M(0xc79f66);
 
 // Gerador pseudoaleatório determinístico para características da vara
 let sd = 7;
-const rnd = () => (sd = sd * 16807 % 2147483647) / 2147483647;
+const rnd = (min, max) => {
+  if (min !== undefined && max !== undefined) {
+    return min + Math.random() * (max - min);
+  }
+  return (sd = sd * 16807 % 2147483647) / 2147483647;
+};
 
 const mesh = (g, m, x = 0, y = 0, z = 0, p = null) => {
   const o = new T.Mesh(g, m);
@@ -121,7 +126,7 @@ export class FishingSystem {
     this.fishCache = {};
 
     // Estados do minigame
-    this.state = 'idle'; // idle, charge, cast, wait, bite, reel, catch
+    this.state = 'idle'; // idle, charge, cast, wait, approach, bite, escape, reel, catch
     this.hold = 0;
     this.pressed = 0;
     this.power = 0;
@@ -139,7 +144,21 @@ export class FishingSystem {
     this.pitch = 0;
     this.mx = 0;
     this.my = 0;
-    this.nibbles = 0; // Número de beliscadas restantes
+    this.nibbles = 0; // Número de beliscadas da sequência
+    this.nibbleCount = 0; // Quantas beliscadas já ocorreram
+    this.preHeld = false; // Flag para impedir segurar antes da hora
+
+    // Parâmetros de Aproximação e Fuga
+    this.approachDuration = 0;
+    this.approachAngle = 0;
+    this.escapeTimer = 0;
+    this.escapeDuration = 1.3;
+    this.escapeDist = 0;
+    this.escapeSpeed = 0;
+    this.escapeAccel = 15;
+    this.escapeDirX = 0;
+    this.escapeDirZ = 1;
+    this.escapeReason = '';
 
     // Peixe atual no anzol
     this.fish = null;
@@ -202,12 +221,16 @@ export class FishingSystem {
   }
 
   playSfx(type, params = {}) {
+    if (this.currentRodIdx <= 3) {
+      if (type === 'cast_whistle' || type === 'click') return;
+    }
     switch (type) {
       case 'cast_whistle': Audio.play('linha_assobio'); break;
       case 'splash': Audio.play('splash', params); break;
       case 'bite': Audio.play('plop'); break;
       case 'catch': Audio.play('peixe_convez'); break;
       case 'snap': Audio.play('carretel_freada'); break;
+      case 'click': Audio.play('click'); break;
     }
   }
 
@@ -464,6 +487,7 @@ export class FishingSystem {
     });
     this.showObj.visible = true;
     this.hk.add(this.showObj);
+    this.hang.position.set(0, -0.65, 0);
     this.hang.visible = true;
     this.animProg = 0;
     this.hangVert = 0;
@@ -475,12 +499,15 @@ export class FishingSystem {
       this.hk.remove(this.showObj);
       this.showObj = null;
     }
+    this.hang.position.set(0, -0.65, 0);
     this.hang.visible = false;
   }
 
   cast() {
-    Audio.carretel.iniciar(80);
-    this.playSfx('cast_whistle');
+    if (this.currentRodIdx > 3) {
+      Audio.carretel.iniciar(80);
+      this.playSfx('cast_whistle');
+    }
     this.state = 'cast';
     this.castTimer = 0;
     this.progress = 0;
@@ -535,24 +562,46 @@ export class FishingSystem {
   }
 
   escape() {
-    Audio.reelStop(false);
-    
-    // Animação de fuga: peixe nada rápido para longe
-    if (this.fish) {
-      this.fish.isFleeing = true;
-      this.fish.fleeSpeed = 8.0;
-      this.fish.fleeDir = Math.atan2(this.fishPos.z - this.bp.z, this.fishPos.x - this.bp.x) + Math.PI;
-      this.say('O peixe fugiu!', 2.0);
-    }
+    this.triggerEscape('O peixe fugiu!');
+  }
 
-    this.detach();
-    this.fish = null;
+  triggerEscape(msg = 'O peixe fugiu!') {
+    if (this.state === 'escape') return;
+    this.state = 'escape';
+    this.escapeTimer = 0;
+    this.escapeDuration = 1.3;
+    this.escapeReason = msg;
+    this.say(this.escapeReason, 2.0);
+
+    // Áudio: som de susto com peixe batendo na água e respingo
+    Audio.reelStop(false);
+    Audio.play('peixe_agua');
+    Audio.play('splash', { k: 0.85 });
+
+    // Partículas e ondulações de susto no local da isca
+    spawnSplash(this.to.x, this.to.z, 16, 1.2);
+    spawnRipple(this.to.x, this.to.z, 1.6, 2.2);
+
+    // Direção da fuga: acelerando para longe do barco/pescador
+    cam.getWorldPosition(this.camWorldPos);
+    let fDirX = this.to.x - this.camWorldPos.x;
+    let fDirZ = this.to.z - this.camWorldPos.z;
+    const len = Math.hypot(fDirX, fDirZ) || 1;
+    fDirX /= len;
+    fDirZ /= len;
+
+    // Desvio angular aleatório para movimento orgânico (-25° a +25°)
+    const angleDev = (Math.random() - 0.5) * 0.8;
+    const cosA = Math.cos(angleDev), sinA = Math.sin(angleDev);
+    this.escapeDirX = fDirX * cosA - fDirZ * sinA;
+    this.escapeDirZ = fDirX * sinA + fDirZ * cosA;
+    this.escapeDist = 0;
+    this.escapeSpeed = 2.5;
+    this.escapeAccel = 15.0;
+    this.fishYaw = Math.atan2(-this.escapeDirZ, this.escapeDirX);
+
+    this.flick = 0.8;
     this.tension = 0;
-    this.flick = 1.2;
-    
-    // Retorna para wait para novo peixe tentar, não para idle (recolher linha)
-    this.state = 'wait';
-    this.timer = rnd(3.0, 8.0);
   }
 
   lose() {
@@ -730,6 +779,9 @@ export class FishingSystem {
           this.collectFish();
           return;
         }
+        if (this.state === 'escape') {
+          return;
+        }
         this.hold = this.pressed = 1;
         this.ui.btnAction.classList.add('active');
       };
@@ -793,6 +845,11 @@ export class FishingSystem {
       if (!this.equipped || GAME.state !== 'PLAY' || !CAM.fpv) return;
       if (e.pointerType !== 'mouse') return;
       if (e.target.closest('#fishing-btn-action') || e.target.closest('.fishing-action-btn') || e.target.closest('#fishing-sel') || e.target.closest('#settings-modal') || e.target.closest('#controls-modal') || e.target.closest('#radial-orders-overlay') || e.target.closest('.modal-overlay')) return;
+      if (this.state === 'catch') {
+        this.collectFish();
+        return;
+      }
+      if (this.state === 'escape') return;
       look(e);
       this.hold = this.pressed = 1;
     });
@@ -825,6 +882,11 @@ export class FishingSystem {
 
       if (e.code === 'Space' && this.equipped) {
         e.preventDefault();
+        if (this.state === 'catch') {
+          this.collectFish();
+          return;
+        }
+        if (this.state === 'escape') return;
         if (!e.repeat) this.hold = this.pressed = 1;
       }
     });
@@ -862,15 +924,17 @@ export class FishingSystem {
     } else if (this.state === 'cast') {
       this.castTimer += dt;
 
-      // Som de carretel e linha assobiando contínuo durante o lançamento (blocos de 1s)
-      if (!this.lastCastSfx || t - this.lastCastSfx > 1.0) {
-        this.playSfx('cast_whistle');
-        this.lastCastSfx = t;
+      if (this.currentRodIdx > 3) {
+        // Som de carretel e linha assobiando contínuo durante o lançamento (blocos de 1s)
+        if (!this.lastCastSfx || t - this.lastCastSfx > 1.0) {
+          this.playSfx('cast_whistle');
+          this.lastCastSfx = t;
+        }
+        
+        const u = Math.min(1, this.castTimer / this.castDuration);
+        const cps = Math.min(90, 10 + (1 - u) * 80);
+        Audio.reelSpeed(cps);
       }
-      
-      const u = Math.min(1, this.castTimer / this.castDuration);
-      const cps = Math.min(90, 10 + (1 - u) * 80);
-      Audio.reelSpeed(cps);
 
       // Gira a manivela durante o lançamento para realismo (linha saindo)
       if (this.crank && S.r) {
@@ -884,73 +948,133 @@ export class FishingSystem {
         this.playSfx('splash', { k: Math.min(1.7, 0.5 + this.power * 1.2) });
         spawnSplash(this.bp.x, this.bp.z, 12, 1.0);
         spawnRipple(this.bp.x, this.bp.z, 1.0);
+        this.detach();
+        this.fish = null;
         this.state = 'wait';
-        this.timer = 4.5 + Math.random() * 6.5;
+        this.timer = rnd(3.5, 6.5);
       }
     } else if (this.state === 'wait') {
       this.timer -= dt;
       this.preHeld = false; // Reset da trava de segurança
+
+      // O anzol fica parado na água esperando o peixe
+      this.hang.position.set(0, -0.65, 0);
+
       if (this.pressed) {
-        // O player decidiu recolher a linha. Se houver um peixe beliscando, ele foge.
-        if (this.fish) {
-          this.say('Você puxou antes da hora!', 1.5);
-          this.fish = null;
-          this.detach();
-        }
+        // O jogador decidiu recolher a linha vazia
         this.startReel(null);
       } else if (this.timer <= 0) {
-        if (!this.fish) {
-          // Início da sequência: sorteia peixe e define entre 2 e 5 beliscadas
-          this.fish = this.pickFish();
-          this.nibbles = Math.floor(rnd(2, 5.9)); 
-          this.nibbleCount = 0;
-        }
-
-        // Inicia uma beliscada (bite)
+        // Timer de aproximação disparou!
+        // Consistência: Sorteia um ÚNICO peixe para toda a tentativa
+        this.fish = this.pickFish();
+        this.nibbles = Math.floor(rnd(2, 5.99)); // 2 a 5 beliscadas
+        this.nibbleCount = 0;
         this.attach(this.fish);
-        this.playSfx('bite');
-        spawnRipple(this.to.x, this.to.z, 0.8, 1.2);
+        this.state = 'approach';
+        this.approachDuration = rnd(1.8, 3.2); // Fase de investigação
+        this.timer = this.approachDuration;
+        this.approachAngle = Math.random() * Math.PI * 2;
+        this.say('Um peixe está rondando a isca...', 2.0);
+      }
+    } else if (this.state === 'approach') {
+      this.timer -= dt;
+
+      // Animação de aproximação: o peixe investiga e nada em curva em direção ao anzol
+      const u = 1 - Math.max(0, this.timer / (this.approachDuration || 2));
+      const dist = (1 - u) * 2.2; // Diminui de 2.2m até 0m
+      const ang = this.approachAngle + u * 2.8;
+      const offX = Math.cos(ang) * dist;
+      const offZ = Math.sin(ang) * dist;
+      this.hang.position.set(offX, -0.65, offZ);
+
+      // Orientação orgânica na direção do deslocamento
+      const vx = -Math.sin(ang) * 2.8 * dist - Math.cos(ang) * 2.2;
+      const vz = Math.cos(ang) * 2.8 * dist - Math.sin(ang) * 2.2;
+      this.fishYaw = Math.atan2(-vz, vx);
+
+      // Pequenas ondulações discretas na superfície durante a investigação
+      if (Math.random() < dt * 1.8) {
+        spawnRipple(this.to.x + offX, this.to.z + offZ, 0.4, 0.8);
+      }
+
+      // Se o jogador puxar antes da hora / tentar fisgar no momento errado:
+      if (this.pressed) {
+        this.triggerEscape('Você puxou antes da hora!');
+      } else if (this.hold) {
+        this.preHeld = true;
+      }
+
+      if (this.state === 'approach' && this.timer <= 0) {
+        // Fim da aproximação: peixe ataca a isca (inicia beliscada com o MESMO peixe)
         this.state = 'bite';
-        
-        // A primeira beliscada é sempre mais rápida e difícil (teste de reflexo puro)
-        const isFirst = this.nibbleCount === 0;
-        this.timer = isFirst ? 0.38 : rnd(0.5, 0.65);
-        this.flick = isFirst ? 0.3 : 0.5;
         this.nibbleCount++;
+        this.playSfx('bite');
+        spawnRipple(this.to.x, this.to.z, 0.9, 1.4);
+        spawnSplash(this.to.x, this.to.z, 6, 0.6);
+        this.flick = 0.5;
+        this.hang.position.set(0, -0.65, 0);
+
+        const isFirst = this.nibbleCount === 1;
+        this.timer = isFirst ? 0.45 : rnd(0.52, 0.70);
       }
     } else if (this.state === 'bite') {
       this.timer -= dt;
+      this.hang.position.set(0, -0.65, 0);
+
       // SÓ FISGA SE FOR UM NOVO CLIQUE (pressed), não se já estiver segurando (hold) antes da beliscada
       if (this.pressed) {
         if (!this.preHeld) {
-          // Sucesso! Fisgou no momento exato da vibração
+          // Sucesso! Fisgou no momento exato
           this.startReel(this.fish);
         } else {
           // Falhou pois já estava segurando o botão antes do peixe beliscar
-          this.say('Você já estava segurando!', 1.5);
-          this.fish = null;
-          this.detach();
-          this.startReel(null);
+          this.triggerEscape('Você já estava segurando!');
         }
       } else if (this.timer <= 0) {
         if (this.nibbleCount < this.nibbles) {
-          // Peixe ainda não mordeu de vez, volta a espreitar
-          this.state = 'wait';
-          this.timer = rnd(0.8, 2.4);
+          // O mesmo peixe continua na água executando a sequência de beliscadas (2 a 5 vezes)
+          this.state = 'approach';
+          this.approachDuration = rnd(1.0, 2.2); // Intervalo de espreita entre beliscadas
+          this.timer = this.approachDuration;
+          this.approachAngle = Math.random() * Math.PI * 2;
+          this.say('O peixe beliscou e continua rondando...', 1.5);
         } else {
-          // Acabaram as beliscadas, o peixe desistiu mas a linha fica na água (como solicitado)
-          this.fish = null;
-          this.detach();
-          this.state = 'wait';
-          this.timer = rnd(3.0, 8.0); // Espera por um novo peixe
-          this.say('O peixe desistiu...', 2.0);
+          // A sequência de beliscadas acabou e o jogador não fisgou: peixe foge assustado
+          this.triggerEscape('O peixe desistiu!');
         }
       }
-      
+
       // Ao entrar no estado de bite, registramos se o player já estava segurando
-      // Se ele já estava segurando, invalidamos a fisgada automática
       if (this.timer > 0 && this.hold && !this.pressed) {
         this.preHeld = true;
+      }
+    } else if (this.state === 'escape') {
+      this.escapeTimer += dt;
+      this.escapeSpeed += this.escapeAccel * dt;
+      this.escapeDist += this.escapeSpeed * dt;
+
+      const offX = this.escapeDirX * this.escapeDist;
+      const offZ = this.escapeDirZ * this.escapeDist;
+      this.hang.position.set(offX, -0.65, offZ);
+      this.fishYaw = Math.atan2(-this.escapeDirZ, this.escapeDirX);
+
+      // Rastro de esteira na água enquanto o peixe foge acelerado
+      if (this.escapeDist > 0.4 && this.escapeDist < 16.0) {
+        spawnLineWake(
+          this.to.x + offX,
+          this.to.z + offZ,
+          this.escapeDirX * this.escapeSpeed,
+          this.escapeDirZ * this.escapeSpeed
+        );
+      }
+
+      if (this.escapeTimer >= this.escapeDuration) {
+        // Fim da animação de fuga: deleta o modelo e volta ao estado wait
+        this.detach();
+        this.fish = null;
+        this.state = 'wait';
+        this.timer = rnd(4.0, 8.0); // Timer realista para o próximo peixe aparecer
+        this.say('Aguardando próximo peixe...', 2.0);
       }
     } else if (this.state === 'reel') {
       cam.getWorldPosition(this.camWorldPos);
@@ -1151,18 +1275,6 @@ export class FishingSystem {
         if (speed > 1.2 && (!f.jumpY || f.jumpY <= 0)) {
           spawnLineWake(this.bp.x, this.bp.z, vx, vz);
         }
-      } else if (f && f.isFleeing) {
-        // Animação de fuga: peixe nada rápido para longe e depois é deletado
-        this.fishPos.x += Math.cos(f.fleeDir) * f.fleeSpeed * dt;
-        this.fishPos.z += Math.sin(f.fleeDir) * f.fleeSpeed * dt;
-        this.fishYaw = f.fleeDir + Math.PI / 2;
-        
-        // Remove o peixe após a fuga visual
-        f.fleeSpeed -= dt * 2;
-        if (f.fleeSpeed <= 0) {
-          this.fish = null;
-          this.detach();
-        }
       } else {
         this.counterControl = 0;
         if (this.hold) {
@@ -1192,7 +1304,7 @@ export class FishingSystem {
         this.snap = Math.max(0, this.snap - dt * 2.5);
       }
 
-      if (this.hold && this.crank && S.r) {
+      if (this.hold && this.crank && S.r && this.currentRodIdx > 3) {
         const d = dt * 14;
         // Inverte o sentido: agora soma (+=) ao recolher, enquanto o lançamento subtrai (-=)
         this.crank.rotation.x += d;
@@ -1241,7 +1353,7 @@ export class FishingSystem {
       const u = Math.min(1, this.castTimer / this.castDuration);
       this.bp.lerpVectors(this.from, this.to, u);
       this.bp.y += 4 * u * (1 - u) * (2 + this.castDist * .2);
-    } else if (this.state === 'wait' || this.state === 'bite') {
+    } else if (this.state === 'wait' || this.state === 'approach' || this.state === 'bite' || this.state === 'escape') {
       this.bp.set(this.to.x, wy(this.to.x, this.to.z), this.to.z);
       if (this.state === 'bite') this.bp.y -= .22; // Afunda mais a boia para clareza visual
     } else if (this.state === 'reel') {
@@ -1304,6 +1416,10 @@ export class FishingSystem {
       ta = S.r ? .78 : .70;
     } else if (this.state === 'bite') {
       tb = .10;
+    } else if (this.state === 'approach') {
+      tb = .02;
+    } else if (this.state === 'escape') {
+      tb = .06;
     } else if (this.state === 'cast' && this.castTimer < .3) {
       ta = S.r ? .28 : .24;
     } else if (this.state === 'catch') {
@@ -1356,7 +1472,7 @@ export class FishingSystem {
     this.setLine(
       this.state === 'reel' ? (1 - this.tension) * .8 :
       this.state === 'catch' ? Math.max(0.01, 0.04 / (1 + 2.5 * ld)) :
-      (this.state === 'wait' || this.state === 'bite') ? .5 : .1
+      (this.state === 'wait' || this.state === 'approach' || this.state === 'bite' || this.state === 'escape') ? .5 : .1
     );
 
     // PEIXE ARTICULADO PENDURADO NO ANZOL
@@ -1368,11 +1484,13 @@ export class FishingSystem {
 
       // Posição vertical: na água o peixe fica submerso abaixo da boia, fora d'água pendurado pelo anzol
       const isCatch = this.state === 'catch';
-      const inWater = this.state === 'bite' || this.state === 'reel';
+      const inWater = this.state === 'approach' || this.state === 'bite' || this.state === 'reel' || this.state === 'escape';
       const weightHangOffset = 0.12 * Math.min(2.0, Math.sqrt(ld));
       
       // Profundidade do anzol: -0.65 na água para não parecer colado na boia, -0.32 no ar
-      this.hang.position.y = inWater ? -0.65 : (-0.32 - weightHangOffset);
+      if (this.state !== 'approach' && this.state !== 'escape') {
+        this.hang.position.set(0, inWater ? -0.65 : (-0.32 - weightHangOffset), 0);
+      }
 
       this.hangVert += ((isCatch ? 1 : 0) - this.hangVert) * Math.min(1, dt * 5);
       this.showObj.scale.setScalar(sc);
@@ -1393,8 +1511,17 @@ export class FishingSystem {
       );
 
       if (inWater) {
-        // Na água (briga/fisgada): o peixe nada e se debate ativamente
-        if (isRunning) {
+        // Na água: animação de acordo com o estado
+        if (this.state === 'escape') {
+          // Nado rápido de fuga em pânico acelerada
+          swim(o, this.animProg * 7.5, 3.6, 1.8, 0);
+        } else if (this.state === 'approach') {
+          // Nado calmo e ondulante de investigação da isca
+          swim(o, this.animProg * 2.8, 1.1, 0.65, 0.15);
+        } else if (this.state === 'bite') {
+          // Ataque agressivo na isca
+          swim(o, this.animProg * 5.0, 2.0, 1.0, 0);
+        } else if (isRunning) {
           // Arrancada violenta: batimentos vigorosos de cauda e cabeça
           const fightSpeed = (1.4 + 0.6 * (this.fish ? this.fish.str : 1)) * (0.6 + 0.4 * (this.fish ? this.fish.sta : 1));
           const fightAmp = 1.3 * (0.5 + 0.5 * (this.fish ? this.fish.sta : 1));
@@ -1461,8 +1588,10 @@ export class FishingSystem {
       idle: 'Segure o clique ou Espaço para carregar, solte para lançar',
       charge: 'Solte para lançar',
       cast: '',
-      wait: 'Esperando a fisgada… segure para recolher',
-      bite: 'Fisgou! Segure para puxar imediatamente',
+      wait: 'Aguardando peixe se aproximar… (clique para recolher)',
+      approach: 'Um peixe está rondando a isca! Fique atento…',
+      bite: '❗ MORDIDA! FISGUE AGORA!',
+      escape: this.escapeReason || 'O peixe se assustou e fugiu!',
       reel: q ? fh() : 'Recolhendo…',
       catch: q ? `${q.nw ? '✨ Nova espécie! ' : ''}${q.n} (${q.l}) · ${fmtWeight(q.w)} · Clique para guardar na mochila` : ''
     };
