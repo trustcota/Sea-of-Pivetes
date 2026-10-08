@@ -1908,11 +1908,11 @@ body.touch-device .fishing-action-btn {
 }
 
 .fishing-fight-btn-left {
-  left: calc(20px + env(safe-area-inset-left, 0px));
+  left: clamp(20%, 28vw, 32%);
 }
 
 .fishing-fight-btn-right {
-  right: calc(20px + env(safe-area-inset-right, 0px));
+  right: clamp(20%, 28vw, 32%);
 }
 
 .fishing-fight-btn.pulse {
