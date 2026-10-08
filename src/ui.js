@@ -207,6 +207,9 @@ export function setupUI(actions = {}) {
   }
 
   const openSettings = () => {
+    if (document.pointerLockElement) {
+      try { document.exitPointerLock(); } catch (_) {}
+    }
     if (settingsModal) {
       settingsModal.style.display = 'flex';
       if (returnRow) returnRow.style.display = GAME.state === 'PLAY' ? 'block' : 'none';
@@ -240,7 +243,12 @@ export function setupUI(actions = {}) {
     };
   });
 
-  const openControls = () => { if (controlsModal) controlsModal.style.display = 'flex'; };
+  const openControls = () => {
+    if (document.pointerLockElement) {
+      try { document.exitPointerLock(); } catch (_) {}
+    }
+    if (controlsModal) controlsModal.style.display = 'flex';
+  };
   const closeControls = () => { if (controlsModal) controlsModal.style.display = 'none'; };
   if (btnControls) btnControls.onclick = openControls;
   if (btnCloseControls) btnCloseControls.onclick = closeControls;

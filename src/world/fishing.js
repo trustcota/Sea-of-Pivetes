@@ -1151,7 +1151,7 @@ export class FishingSystem {
         if (speed > 1.2 && (!f.jumpY || f.jumpY <= 0)) {
           spawnLineWake(this.bp.x, this.bp.z, vx, vz);
         }
-      } else if (f.isFleeing) {
+      } else if (f && f.isFleeing) {
         // Animação de fuga: peixe nada rápido para longe e depois é deletado
         this.fishPos.x += Math.cos(f.fleeDir) * f.fleeSpeed * dt;
         this.fishPos.z += Math.sin(f.fleeDir) * f.fleeSpeed * dt;
