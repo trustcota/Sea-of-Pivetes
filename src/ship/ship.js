@@ -203,7 +203,7 @@ export const SH = (() => {
     const LF = [dr(.022), dr(.022)], BR = (ix === 0) ? [own(dr(.026, rR)), own(dr(.026, rR))] : [], CL = [own(dr(.022, gR)), own(dr(.022, gR))], SS = [dr(.03), dr(.03)], BU = own(dr(.022, gR)), HY = own(dr(.02, gR));
     const so = {
       name, d: 0, t: 0, upd(tt, wd, fs) {
-        const d = this.d, a = rg.a, c = Math.cos(a), s2 = Math.sin(a), W2 = (x, y, zl) => V(x * c + zl * s2, y, -x * s2 + zl * c + z);
+        const d = this.d, a = rg.a, c = Math.cos(a), s2 = Math.sin(a), W2 = (x, y, zl) => V(x * c - zl * s2, y, x * s2 + zl * c + z);
         const hh = Math.max(.001, h * d), bl = (wd < 0 ? -1 : 1) * (.12 + .88 * Math.abs(wd)) * .1 * w * Math.pow(d, .6), fa = (.02 + .1 * fs) * Math.min(1, d * 1.5), ph = z * 1.7 + y, on = d > .015;
         m.visible = on; [BU, ...CL, ...SS].forEach(o => o.visible = on);
         for (let i = 0; i < n; i++) {
