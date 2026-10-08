@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { clamp, wrapA } from '../core/math.js';
 import { cam, sc, cv } from '../core/renderer.js';
-import { ST, CAM, GAME, fp } from '../core/state.js';
+import { S, WI, ST, CAM, GAME, fp } from '../core/state.js';
 import { H } from './ocean.js';
+import { spawnSplash, spawnRipple, spawnLineWake } from './weather.js';
 import { ILHAS } from './archipelago.js';
 import { SPC, buildFish, swim, createArticulatedFishMesh } from './fish.js';
+import { Audio } from '../core/audio.js';
 
 const T = THREE;
 const PI = Math.PI;
@@ -137,6 +139,7 @@ export class FishingSystem {
     this.pitch = 0;
     this.mx = 0;
     this.my = 0;
+    this.nibbles = 0; // Número de beliscadas restantes
 
     // Peixe atual no anzol
     this.fish = null;
@@ -198,65 +201,14 @@ export class FishingSystem {
     this.setupInputs();
   }
 
-  playSfx(type) {
-    try {
-      if (!this.audioCtx) {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (AudioCtx) this.audioCtx = new AudioCtx();
-      }
-      if (!this.audioCtx || this.audioCtx.state === 'suspended') {
-        if (this.audioCtx) this.audioCtx.resume().catch(() => {});
-        return;
-      }
-      const t = this.audioCtx.currentTime;
-      const osc = this.audioCtx.createOscillator();
-      const gain = this.audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(this.audioCtx.destination);
-
-      if (type === 'cast') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(450, t);
-        osc.frequency.exponentialRampToValueAtTime(120, t + 0.25);
-        gain.gain.setValueAtTime(0.12, t);
-        gain.gain.linearRampToValueAtTime(0.01, t + 0.25);
-        osc.start(t);
-        osc.stop(t + 0.25);
-      } else if (type === 'splash') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(140, t);
-        osc.frequency.linearRampToValueAtTime(60, t + 0.35);
-        gain.gain.setValueAtTime(0.2, t);
-        gain.gain.linearRampToValueAtTime(0.01, t + 0.35);
-        osc.start(t);
-        osc.stop(t + 0.35);
-      } else if (type === 'bite') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(320, t);
-        osc.frequency.exponentialRampToValueAtTime(580, t + 0.15);
-        gain.gain.setValueAtTime(0.25, t);
-        gain.gain.linearRampToValueAtTime(0.01, t + 0.18);
-        osc.start(t);
-        osc.stop(t + 0.18);
-      } else if (type === 'catch') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(350, t);
-        osc.frequency.setValueAtTime(523, t + 0.1);
-        osc.frequency.setValueAtTime(659, t + 0.2);
-        gain.gain.setValueAtTime(0.22, t);
-        gain.gain.linearRampToValueAtTime(0.01, t + 0.45);
-        osc.start(t);
-        osc.stop(t + 0.45);
-      } else if (type === 'snap') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(800, t);
-        osc.frequency.linearRampToValueAtTime(180, t + 0.2);
-        gain.gain.setValueAtTime(0.3, t);
-        gain.gain.linearRampToValueAtTime(0.01, t + 0.2);
-        osc.start(t);
-        osc.stop(t + 0.2);
-      }
-    } catch (_) {}
+  playSfx(type, params = {}) {
+    switch (type) {
+      case 'cast_whistle': Audio.play('linha_assobio'); break;
+      case 'splash': Audio.play('splash', params); break;
+      case 'bite': Audio.play('plop'); break;
+      case 'catch': Audio.play('peixe_convez'); break;
+      case 'snap': Audio.play('carretel_freada'); break;
+    }
   }
 
   buildBobber() {
@@ -337,12 +289,14 @@ export class FishingSystem {
       for (const s of [-1, 1]) mesh(new T.CylinderGeometry(fr, fr, .006, 8), fl, s * .024, 0, 0, this.spool).rotation.z = PI / 2;
       mesh(new T.BoxGeometry(.034, .05, .05), W[0], 0, 0, .032, rg);
 
-      if (R > 1) {
+      if (R >= 1) {
         this.crank = new T.Group();
-        this.crank.position.x = .057;
+        // Inverte o lado da manivela para as varas de nível superior (4-9)
+        const side = k >= 4 ? -1 : 1;
+        this.crank.position.x = .057 * side;
         rg.add(this.crank);
         mesh(new T.BoxGeometry(.006, .065, .008), matIron, 0, .03, 0, this.crank);
-        mesh(new T.CylinderGeometry(.011, .011, .03, 5), R === 5 ? matBone : W[2 % W.length], .014, .064, 0, this.crank).rotation.z = PI / 2;
+        mesh(new T.CylinderGeometry(.011, .011, .03, 5), R === 5 ? matBone : W[2 % W.length], .014 * side, .064, 0, this.crank).rotation.z = PI / 2;
       } else {
         this.crank = this.spool;
       }
@@ -416,10 +370,23 @@ export class FishingSystem {
     this.tip.getWorldPosition(this.T);
     put(this.T);
 
+    // Influência do vento na curvatura da linha (catenária horizontal e vertical)
+    const windEffect = WI.wsp * 0.012;
+    const windDirX = Math.sin(WI.a);
+    const windDirZ = Math.cos(WI.a);
+
     for (let i = 1; i <= this.NL; i++) {
       const u = i / this.NL;
       this.V.lerpVectors(this.T, this.E, u);
-      this.V.y -= sag * 4 * u * (1 - u);
+      
+      const arch = 4 * u * (1 - u);
+      this.V.y -= sag * arch;
+      
+      // Deflexão lateral pelo vento (mais visível em linhas frouxas/sag alto)
+      const windDrift = windEffect * (0.5 + sag * 1.5) * arch;
+      this.V.x += windDirX * windDrift;
+      this.V.z += windDirZ * windDrift;
+      
       put(this.V);
     }
 
@@ -512,7 +479,8 @@ export class FishingSystem {
   }
 
   cast() {
-    this.playSfx('cast');
+    Audio.reelStart(80);
+    this.playSfx('cast_whistle');
     this.state = 'cast';
     this.castTimer = 0;
     this.progress = 0;
@@ -547,6 +515,7 @@ export class FishingSystem {
   }
 
   startReel(f) {
+    Audio.reelStart(0);
     this.fish = f;
     this.state = 'reel';
     this.progress = 0;
@@ -566,6 +535,7 @@ export class FishingSystem {
   }
 
   escape() {
+    Audio.reelStop(false);
     this.fish = null;
     this.detach();
     this.state = 'idle';
@@ -575,6 +545,7 @@ export class FishingSystem {
   }
 
   lose() {
+    Audio.reelStop(true);
     this.playSfx('snap');
     this.detach();
     this.state = 'idle';
@@ -585,6 +556,7 @@ export class FishingSystem {
   }
 
   finish() {
+    Audio.reelStop(false);
     this.tension = 0;
     if (!this.fish) {
       this.state = 'idle';
@@ -592,6 +564,14 @@ export class FishingSystem {
       return;
     }
     this.playSfx('catch');
+    
+    // Dispara partículas de respingo na saída do peixe
+    spawnSplash(this.bp.x, this.bp.z, 25, 1.4);
+    spawnRipple(this.bp.x, this.bp.z, 2.0, 2.5);
+    
+    // Armazena a posição inicial para a parábola de içamento
+    this.catchFrom = this.bp.clone();
+    
     this.state = 'catch';
     this.showTime = 0;
     this.totalCaught++;
@@ -671,6 +651,7 @@ export class FishingSystem {
 
   unequip() {
     this.equipped = false;
+    Audio.reelStop(false);
     if (this.rod) this.rod.visible = false;
     this.detach();
     this.fish = null;
@@ -869,31 +850,96 @@ export class FishingSystem {
       if (!this.hold) this.cast();
     } else if (this.state === 'cast') {
       this.castTimer += dt;
+
+      // Som de carretel e linha assobiando contínuo durante o lançamento (blocos de 1s)
+      if (!this.lastCastSfx || t - this.lastCastSfx > 1.0) {
+        this.playSfx('cast_whistle');
+        this.lastCastSfx = t;
+      }
+      
+      const u = Math.min(1, this.castTimer / this.castDuration);
+      const cps = Math.min(90, 10 + (1 - u) * 80);
+      Audio.reelSpeed(cps);
+
+      // Gira a manivela durante o lançamento para realismo (linha saindo)
+      if (this.crank && S.r) {
+        const rotSpeed = 15 + this.castDist * 0.4;
+        this.crank.rotation.x -= dt * rotSpeed;
+        if (this.spool !== this.crank) this.spool.rotation.x -= dt * rotSpeed;
+      }
+
       if (this.castTimer >= this.castDuration) {
-        this.playSfx('splash');
+        Audio.reelStop(false);
+        this.playSfx('splash', { k: Math.min(1.7, 0.5 + this.power * 1.2) });
+        spawnSplash(this.bp.x, this.bp.z, 12, 1.0);
+        spawnRipple(this.bp.x, this.bp.z, 1.0);
         this.state = 'wait';
         this.timer = 4.5 + Math.random() * 6.5;
       }
     } else if (this.state === 'wait') {
       this.timer -= dt;
+      this.preHeld = false; // Reset da trava de segurança
       if (this.pressed) {
+        // O player decidiu recolher a linha. Se houver um peixe beliscando, ele foge.
+        if (this.fish) {
+          this.say('Você puxou antes da hora!', 1.5);
+          this.fish = null;
+          this.detach();
+        }
         this.startReel(null);
       } else if (this.timer <= 0) {
-        this.fish = this.pickFish();
+        if (!this.fish) {
+          // Início da sequência: sorteia peixe e define entre 2 e 5 beliscadas
+          this.fish = this.pickFish();
+          this.nibbles = Math.floor(rnd(2, 5.9)); 
+          this.nibbleCount = 0;
+        }
+
+        // Inicia uma beliscada (bite)
         this.attach(this.fish);
         this.playSfx('bite');
+        spawnRipple(this.to.x, this.to.z, 0.8, 1.2);
         this.state = 'bite';
-        this.timer = 1.8;
+        
+        // A primeira beliscada é sempre mais rápida e difícil (teste de reflexo puro)
+        const isFirst = this.nibbleCount === 0;
+        this.timer = isFirst ? 0.38 : rnd(0.5, 0.65);
+        this.flick = isFirst ? 0.3 : 0.5;
+        this.nibbleCount++;
       }
     } else if (this.state === 'bite') {
       this.timer -= dt;
-      if (this.hold) {
-        this.startReel(this.fish);
+      // SÓ FISGA SE FOR UM NOVO CLIQUE (pressed), não se já estiver segurando (hold) antes da beliscada
+      if (this.pressed) {
+        if (!this.preHeld) {
+          // Sucesso! Fisgou no momento exato da vibração
+          this.startReel(this.fish);
+        } else {
+          // Falhou pois já estava segurando o botão antes do peixe beliscar
+          this.say('Você já estava segurando!', 1.5);
+          this.fish = null;
+          this.detach();
+          this.startReel(null);
+        }
       } else if (this.timer <= 0) {
-        this.fish = null;
-        this.detach();
-        this.state = 'idle';
-        this.say('O peixe escapou do anzol…', 2);
+        if (this.nibbleCount < this.nibbles) {
+          // Peixe ainda não mordeu de vez, volta a espreitar
+          this.state = 'wait';
+          this.timer = rnd(0.8, 2.4);
+        } else {
+          // Acabaram as beliscadas, o peixe desistiu mas a linha fica na água (como solicitado)
+          this.fish = null;
+          this.detach();
+          this.state = 'wait';
+          this.timer = rnd(3.0, 8.0); // Espera por um novo peixe
+          this.say('O peixe desistiu...', 2.0);
+        }
+      }
+      
+      // Ao entrar no estado de bite, registramos se o player já estava segurando
+      // Se ele já estava segurando, invalidamos a fisgada automática
+      if (this.timer > 0 && this.hold && !this.pressed) {
+        this.preHeld = true;
       }
     } else if (this.state === 'reel') {
       cam.getWorldPosition(this.camWorldPos);
@@ -915,6 +961,9 @@ export class FishingSystem {
       const isRunning = f && f.ph === 2;
       let ld = 0;
       if (f) {
+        // Armazena a posição anterior para calcular a velocidade do rastro
+        const oldX = this.fishPos.x, oldZ = this.fishPos.z;
+
         // Eficácia do contra-ataque da vara contra a arrancada lateral do peixe
         let rodCounter = 0;
         if (f.fd === -1) {
@@ -986,27 +1035,70 @@ export class FishingSystem {
           escX /= el; escZ /= el;
 
           const fishSpeed = (3.2 + 2.0 * f.str) * (0.45 + 0.55 * f.sta);
-          if (this.counterControl > 0.3) {
-            // Mover a vara para o lado oposto segura o peixe e não deixa ele nadar para longe
-            // Deslocamento de fuga vai a zero, contendo o peixe
-          } else {
-            // Se não contra-atacar, o peixe nada na direção de fuga
-            this.fishPos.x += escX * fishSpeed * dt;
-            this.fishPos.z += escZ * fishSpeed * dt;
+
+          // Resistência hidrodinâmica e contra-ataque vetorial:
+          // Em vez de congelar a posição do peixe ao contra-atacar, a linha retém o avanço radial
+          // enquanto o arrasto da água deflete o peixe num arco dinâmico e vivo
+          const counterEff = clamp(this.counterControl, 0, 1);
+          const outwardFactor = Math.max(0.06, 1.0 - 0.92 * counterEff);
+          const lateralFactor = Math.max(0.18, 1.0 - 0.60 * counterEff);
+
+          const radialSpeed = (escX * dirToFishX + escZ * dirToFishZ) * fishSpeed * outwardFactor;
+          const tangSpeed = (escX * perpX + escZ * perpZ) * fishSpeed * lateralFactor;
+
+          const effVx = (dirToFishX * radialSpeed + perpX * tangSpeed);
+          const effVz = (dirToFishZ * radialSpeed + perpZ * tangSpeed);
+
+          this.fishPos.x += effVx * dt;
+          this.fishPos.z += effVz * dt;
+
+          // Salto ocasional de peixes pelágicos durante a luta
+          const isPelagic = (f.k === 0 || f.k === 1 || f.k === 14); // Atum, Espada, Dourado
+          if (isPelagic && f.sta > 0.3) {
+            if (f.jumpVy === undefined) { f.jumpVy = 0; f.jumpY = 0; f.jumpT = rnd(2, 6); }
+            f.jumpT -= dt;
+            if (f.jumpT <= 0 && f.jumpY <= 0) {
+              f.jumpVy = rnd(3.5, 5.0);
+              f.jumpT = rnd(4, 10);
+              spawnSplash(this.fishPos.x, this.fishPos.z, 12, 1.0);
+              spawnRipple(this.fishPos.x, this.fishPos.z, 1.4);
+              this.playSfx('splash', { k: 1.5 });
+            }
           }
 
-          // Orientação da cabeça do peixe na direção exata de fuga (+X local aponta para velocidade)
-          const escYaw = Math.atan2(-escZ, escX);
+          if (f.jumpVy !== undefined && (f.jumpY > 0 || f.jumpVy > 0)) {
+            f.jumpVy -= 9.8 * dt;
+            f.jumpY += f.jumpVy * dt;
+            if (f.jumpY <= 0) {
+              f.jumpY = 0; f.jumpVy = 0;
+              spawnSplash(this.fishPos.x, this.fishPos.z, 12, 0.8);
+              spawnRipple(this.fishPos.x, this.fishPos.z, 1.2);
+              this.playSfx('splash');
+            }
+          }
+
+          // Orientação orgânica da cabeça na direção do vetor efetivo de nado
+          const escYaw = Math.atan2(-effVz, effVx);
           this.fishYaw += wrapA(escYaw - this.fishYaw) * Math.min(1, dt * 8);
 
-          // Tensão: só aumenta até o limite máximo se o jogador ficar puxando o carretel contra o peixe em fuga
+          // Modelo vetorial de tensão da linha:
+          // Tração direta do peixe ponderada pelo peso e vigor
+          const fishPullForce = (0.50 + 0.35 * f.str) * (0.40 + 0.60 * f.sta) * Math.min(1.6, 0.7 + 0.5 * sq);
           if (this.hold) {
-            // Puxar o peixe brigando aumenta a tensão progressivamente
-            const targetTension = 0.95;
-            this.tension += (targetTension - this.tension) * Math.min(1, dt * 2.2);
+            // O jogador puxa o carretel contra o peixe brigando (choque de vetores opostos)
+            const targetTension = clamp(0.60 + 0.35 * fishPullForce + 0.15 * Math.max(0, ld - 1), 0.78, 1.0);
+            this.tension += (targetTension - this.tension) * Math.min(1, dt * 2.8);
+
+            // Ruptura por impacto instantâneo (Shock Snap):
+            // Peixe significativamente acima da capacidade da vara arrancando com carretel travado
+            if (ld > 1.25 && f.sta > 0.45 && this.tension > 0.94) {
+              this.snap += dt * 3.5;
+            }
           } else {
-            // Soltar o carretel e contra-atacar com a vara mantém a tensão segura e alivia a linha
-            const targetTension = this.counterControl > 0.3 ? 0.42 : 0.55;
+            // Soltar o carretel e contra-atacar alivia a tensão e absorve a arrancada
+            const targetTension = this.counterControl > 0.3
+              ? clamp(0.35 + 0.12 * sq, 0.25, 0.52)
+              : clamp(0.48 + 0.14 * sq, 0.35, 0.65);
             this.tension += (targetTension - this.tension) * Math.min(1, dt * 3.5);
           }
         } else {
@@ -1021,11 +1113,32 @@ export class FishingSystem {
             const pullYaw = Math.atan2(dirToFishZ, -dirToFishX);
             this.fishYaw += wrapA(pullYaw - this.fishYaw) * Math.min(1, dt * 6);
 
-            this.tension += (0.42 - this.tension) * Math.min(1, dt * 4.0);
+            const targetTension = clamp(0.30 + 0.18 * Math.min(1.5, sq), 0.25, 0.55);
+            this.tension += (targetTension - this.tension) * Math.min(1, dt * 4.0);
           } else {
-            // Linha frouxa, peixe flutua
+            // Linha frouxa, peixe flutua e nada de forma orgânica
             this.tension += (0.02 - this.tension) * Math.min(1, dt * 3.5);
+            
+            // Movimento de repouso: peixe nada lentamente em círculos suaves ou desvia
+            const idleSpeed = 0.5 + 0.5 * (f ? f.sta : 0.5);
+            const driftAngle = Math.sin(this.animProg * 0.4 + (f ? f.s : 0)) * 0.6;
+            const vx = Math.cos(this.fishYaw + driftAngle) * idleSpeed;
+            const vz = -Math.sin(this.fishYaw + driftAngle) * idleSpeed;
+            
+            this.fishPos.x += vx * dt;
+            this.fishPos.z += vz * dt;
+            
+            const idleYaw = Math.atan2(-vz, vx);
+            this.fishYaw += wrapA(idleYaw - this.fishYaw) * Math.min(1, dt * 2.5);
           }
+        }
+
+        // Dispara rastro de espuma (V-wake) se o peixe estiver se movendo e submerso
+        const vx = (this.fishPos.x - oldX) / dt;
+        const vz = (this.fishPos.z - oldZ) / dt;
+        const speed = Math.hypot(vx, vz);
+        if (speed > 1.2 && (!f.jumpY || f.jumpY <= 0)) {
+          spawnLineWake(this.bp.x, this.bp.z, vx, vz);
         }
       } else {
         this.counterControl = 0;
@@ -1035,13 +1148,10 @@ export class FishingSystem {
           this.tension += (0.18 - this.tension) * Math.min(1, dt * 5);
         } else {
           this.tension += (0.02 - this.tension) * Math.min(1, dt * 4);
-        }
-        this.timer -= dt;
-        if (this.timer <= 0 && dist > 5) {
-          this.fish = this.pickFish();
-          this.attach(this.fish);
-          this.playSfx('bite');
-          this.say('Fisgou!', 1.2);
+          
+          // Isca flutuando suavemente
+          this.fishPos.x += Math.sin(this.animProg * 0.2) * 0.15 * dt;
+          this.fishPos.z += Math.cos(this.animProg * 0.2) * 0.15 * dt;
         }
       }
 
@@ -1061,8 +1171,16 @@ export class FishingSystem {
 
       if (this.hold && this.crank && S.r) {
         const d = dt * 14;
-        this.crank.rotation.x -= d;
-        if (this.spool !== this.crank) this.spool.rotation.x -= d;
+        // Inverte o sentido: agora soma (+=) ao recolher, enquanto o lançamento subtrai (-=)
+        this.crank.rotation.x += d;
+        if (this.spool !== this.crank) this.spool.rotation.x += d;
+
+        // Som de carretel dinâmico
+        const ld = this.fish ? this.fish.w / CAP[this.currentRodIdx] : 0;
+        const cps = Math.min(90, 8 + (1 + ld) * 8);
+        Audio.reelSpeed(cps);
+      } else {
+        Audio.reelSpeed(0);
       }
 
       const maxReach = S.r ? 48 : (this.castDist + 3.8);
@@ -1102,19 +1220,33 @@ export class FishingSystem {
       this.bp.y += 4 * u * (1 - u) * (2 + this.castDist * .2);
     } else if (this.state === 'wait' || this.state === 'bite') {
       this.bp.set(this.to.x, wy(this.to.x, this.to.z), this.to.z);
-      if (this.state === 'bite') this.bp.y -= .08;
+      if (this.state === 'bite') this.bp.y -= .22; // Afunda mais a boia para clareza visual
     } else if (this.state === 'reel') {
-      this.bp.set(this.fishPos.x, wy(this.fishPos.x, this.fishPos.z), this.fishPos.z);
+      const fishY = (this.fish && this.fish.jumpY) ? this.fish.jumpY : 0;
+      this.bp.set(this.fishPos.x, wy(this.fishPos.x, this.fishPos.z) + fishY, this.fishPos.z);
     } else if (this.state === 'catch') {
       cam.getWorldPosition(this.camWorldPos);
       cam.getWorldDirection(this.castDir);
-      // Apresentação frontal erguida e centralizada na câmera FPV, com altura ideal para visualização completa do peixe
-      const weightDrop = 0.10 * Math.min(1.8, Math.sqrt(ld));
-      this.bp.set(
+      
+      // Apresentação frontal erguida e centralizada na câmera FPV
+      const weightDrop = 0.12 * Math.min(2.0, Math.sqrt(ld));
+      // Usa this.V como buffer temporário para o destino para não poluir this.to
+      this.V.set(
         this.camWorldPos.x + this.castDir.x * 1.35 - this.castDir.z * 0.05,
         this.camWorldPos.y + this.castDir.y * 1.35 + 0.10 - weightDrop,
         this.camWorldPos.z + this.castDir.z * 1.35 + this.castDir.x * 0.05
       );
+
+      // Trajetória parabólica de içamento (duração de 1.0s para ser mais perceptível)
+      const liftDur = 1.0;
+      const u = Math.min(1, this.showTime / liftDur);
+      const ease = u * (2 - u); // easeOutQuad
+      
+      this.bp.lerpVectors(this.catchFrom || this.bp, this.V, ease);
+      
+      // Arco parabólico: o peixe sobe em curva acentuada antes de chegar na mão
+      const arcHeight = 1.8 * Math.sin(u * Math.PI);
+      this.bp.y += arcHeight;
     } else {
       this.tip.getWorldPosition(this.V);
       this.bp.set(this.V.x, this.V.y - .55, this.V.z);
@@ -1160,9 +1292,15 @@ export class FishingSystem {
     this.flick = Math.max(0, this.flick - dt * 2.2);
     tb += this.flick * .9;
 
-    // Flexão da vara com amortecimento suave e estável (zero trepidação)
-    const bendSpeed = Math.min(14, 8 + 1.5 * this.currentRodIdx);
-    this.bend += (tb - this.bend) * Math.min(1, dt * bendSpeed);
+    // Flexão da vara com sistema Mola-Amortecedor (Spring-Damper) para rebote elástico
+    // Parâmetros baseados no material/nível da vara
+    const stiffness = 14 + this.currentRodIdx * 10;
+    const damping = 1.8 + this.currentRodIdx * 0.6;
+    
+    const acceleration = stiffness * (tb - this.bend) - damping * this.bendVelocity;
+    this.bendVelocity += acceleration * dt;
+    this.bend += this.bendVelocity * dt;
+
     this.rodAngle += (ta - this.rodAngle) * Math.min(1, dt * (this.state === 'cast' ? 16 : 7));
 
     this.segs.forEach(j => {
@@ -1183,9 +1321,9 @@ export class FishingSystem {
 
     // Suavização do mouse / botões de combate para não travar nas bordas
     if (this.btnLeftHold) {
-      this.mx = -1.0;
+      this.mx += (-1.0 - this.mx) * Math.min(1, dt * 10.0);
     } else if (this.btnRightHold) {
-      this.mx = 1.0;
+      this.mx += (1.0 - this.mx) * Math.min(1, dt * 10.0);
     } else {
       this.mx += (0 - this.mx) * Math.min(1, dt * 1.8);
     }
@@ -1204,39 +1342,80 @@ export class FishingSystem {
       const o = this.showObj.userData.o;
       const k = Math.min(1, this.animProg * 4);
       const sc = this.showObj.userData.s * k * (2 - k);
+
+      // Posição vertical: na água o peixe fica submerso abaixo da boia, fora d'água pendurado pelo anzol
       const isCatch = this.state === 'catch';
       const inWater = this.state === 'bite' || this.state === 'reel';
-      const isRunning = this.fish && this.fish.ph === 2;
-
-      // Posição vertical estável: na água fica na linha da superfície, fora d'água fica pendurado pelo anzol descendo com o peso
-      const weightHangOffset = 0.08 * Math.min(2.0, Math.sqrt(ld));
-      this.hang.position.y = isCatch ? (-0.28 - weightHangOffset) : 0.05;
+      const weightHangOffset = 0.12 * Math.min(2.0, Math.sqrt(ld));
+      
+      // Profundidade do anzol: -0.65 na água para não parecer colado na boia, -0.32 no ar
+      this.hang.position.y = inWater ? -0.65 : (-0.32 - weightHangOffset);
 
       this.hangVert += ((isCatch ? 1 : 0) - this.hangVert) * Math.min(1, dt * 5);
       this.showObj.scale.setScalar(sc);
-      this.showObj.position.x = -o.S.L * sc / 2;
+      
+      // Ajuste para prender pela boca: o nariz do modelo está em L/2
+      this.showObj.position.x = -o.S.L * sc * 0.48;
       this.showObj.visible = true;
       this.hk.rotation.z = this.hangVert * PI / 2;
 
-      // Postura estável e natural do peixe no anzol (zero vibrações, debates ou tremores)
+      // Postura viva e debate dinâmico do peixe no anzol
+      const isRunning = this.fish && this.fish.ph === 2;
+      const thrashRoll = (inWater && isRunning) ? Math.sin(this.animProg * 14) * 0.15 * (this.fish ? this.fish.sta : 1) : 0;
+      
       this.hang.rotation.set(
         0,
         this.fishYaw * (1 - this.hangVert) + this.hangVert * 0.4,
-        0
+        thrashRoll * (1 - this.hangVert)
       );
-      if (o.pv) {
-        o.pv.forEach(p => { p.rotation.y = 0; });
+
+      if (inWater) {
+        // Na água (briga/fisgada): o peixe nada e se debate ativamente
+        if (isRunning) {
+          // Arrancada violenta: batimentos vigorosos de cauda e cabeça
+          const fightSpeed = (1.4 + 0.6 * (this.fish ? this.fish.str : 1)) * (0.6 + 0.4 * (this.fish ? this.fish.sta : 1));
+          const fightAmp = 1.3 * (0.5 + 0.5 * (this.fish ? this.fish.sta : 1));
+          const fightTurn = this.fish && this.fish.fd ? this.fish.fd * 0.8 : 0;
+          swim(o, this.animProg * 3.6, fightSpeed, fightAmp, fightTurn);
+        } else {
+          // Descanso / sendo recolhido: ondulações mais calmas e orgânicas
+          const tiredSpeed = 0.9 * (0.4 + 0.6 * (this.fish ? this.fish.sta : 0.5));
+          const tiredAmp = 0.6 * (0.4 + 0.6 * (this.fish ? this.fish.sta : 0.5));
+          swim(o, this.animProg * 2.2, tiredSpeed, tiredAmp, Math.sin(this.animProg * 0.5) * 0.2);
+        }
+      } else if (isCatch) {
+        // Fora d'água (capturado): peixe pendurado no anzol com surtos de debate
+        // O peixe se debate mais forte em intervalos (bursts)
+        const burst = Math.pow(Math.max(0, Math.sin(this.showTime * 2.0)), 3.0);
+        const twitchFreq = 7.0 + burst * 15.0;
+        const twitchAmp = 0.08 + burst * 0.45;
+        const decay = Math.max(0, 1.0 - this.showTime * 0.08);
+        
+        const twitch = Math.sin(this.showTime * twitchFreq) * twitchAmp * decay;
+        
+        if (o.pv) {
+          o.pv.forEach((p, i) => {
+            const segRatio = i / (o.pv.length || 1);
+            p.rotation.y = twitch * segRatio;
+          });
+        }
+        if (o.tl) o.tl.rotation.y = twitch * 1.8;
+        if (o.rip) {
+          o.rip.forEach(([m]) => { m.rotation.x = Math.abs(twitch) * 0.3; });
+        }
+        if (o.pf) {
+          o.pf.forEach(([h, s]) => {
+            h.rotation.x = s * (PI / 2 + 0.25 + Math.abs(twitch) * 0.5);
+          });
+        }
+        if (o.jv) o.jv.rotation.z = -0.08 + twitch * 0.3;
+      } else {
+        if (o.pv) o.pv.forEach(p => { p.rotation.y = 0; });
+        if (o.tl) o.tl.rotation.y = 0;
+        if (o.rip) o.rip.forEach(([m]) => { m.rotation.x = 0; });
+        if (o.pf) o.pf.forEach(([h, s]) => { h.rotation.x = s * (PI / 2 + 0.25); });
+        if (o.jv) o.jv.rotation.z = -0.1;
       }
-      if (o.tl) o.tl.rotation.y = 0;
-      if (o.rip) {
-        o.rip.forEach(([m]) => { m.rotation.x = 0; });
-      }
-      if (o.pf) {
-        o.pf.forEach(([h, s]) => {
-          h.rotation.x = s * (PI / 2 + 0.25);
-        });
-      }
-      if (o.jv) o.jv.rotation.z = -0.1;
     }
 
     // ATUALIZAÇÃO DO HUD / INTERFACE
@@ -1356,3 +1535,6 @@ export class FishingSystem {
 }
 
 export const fishingSystem = new FishingSystem();
+if (typeof window !== 'undefined') {
+  window.fishingSystem = fishingSystem;
+}

@@ -7,6 +7,7 @@ import { H, fastH } from '../world/ocean.js';
 import { clouds, cm, cloudState, updateCloudsSystem } from '../world/clouds.js';
 import { ILHAS } from '../world/archipelago.js';
 import { SH } from '../ship/ship.js';
+import { Audio } from '../core/audio.js';
 
 const T = THREE;
 const wp = new T.Vector3();
@@ -141,6 +142,132 @@ export function updAnchorSplash(dt, ch, sh) {
   anG.attributes.position.needsUpdate = true;
 }
 
+// Sistema de Partículas de Impacto na Água (Splash) para Pesca e Saltos
+const SPN = 120, spP_ = new Float32Array(SPN * 3), spV = new Float32Array(SPN * 3), spL = new Float32Array(SPN), spG_ = new T.BufferGeometry();
+spG_.setAttribute('position', new T.BufferAttribute(spP_, 3));
+export const spM_ = new T.Points(spG_, new T.PointsMaterial({ color: 0xeefaff, size: 1.2, transparent: true, opacity: 0.85, fog: false }));
+spM_.frustumCulled = false;
+sc.add(spM_);
+
+let spIdx = 0;
+export function spawnSplash(x, z, count = 12, force = 1.0) {
+  const y = fastH(x, z);
+  for (let k = 0; k < count; k++) {
+    const i = spIdx++ % SPN;
+    spP_[i * 3] = x + rnd(-0.15, 0.15);
+    spP_[i * 3 + 1] = y + rnd(0.05, 0.2);
+    spP_[i * 3 + 2] = z + rnd(-0.15, 0.15);
+    
+    const ang = Math.random() * Math.PI * 2;
+    const mag = rnd(0.5, 2.2) * force;
+    spV[i * 3] = Math.cos(ang) * mag * 0.6;
+    spV[i * 3 + 1] = rnd(1.5, 4.5) * force;
+    spV[i * 3 + 2] = Math.sin(ang) * mag * 0.6;
+    spL[i] = rnd(0.4, 0.9);
+  }
+}
+
+export function updSplashes(dt) {
+  for (let i = 0; i < SPN; i++) {
+    if (spL[i] <= 0) { spP_[i * 3 + 1] = -50; continue; }
+    spL[i] -= dt;
+    spV[i * 3 + 1] -= 9.8 * dt; // Gravidade
+    spP_[i * 3] += spV[i * 3] * dt;
+    spP_[i * 3 + 1] += spV[i * 3 + 1] * dt;
+    spP_[i * 3 + 2] += spV[i * 3 + 2] * dt;
+
+    if (spV[i * 3 + 1] < 0 && spP_[i * 3 + 1] <= fastH(spP_[i * 3], spP_[i * 3 + 2])) {
+      spL[i] = 0;
+      spP_[i * 3 + 1] = -50;
+    }
+  }
+  spG_.attributes.position.needsUpdate = true;
+}
+
+// Sistema de Ondulações (Expanding Rings) na Superfície
+const RPN = 15;
+const ripples = [];
+export const rippleGroup = new T.Group();
+sc.add(rippleGroup);
+
+const ringGeo = new T.RingGeometry(0.95, 1.0, 32);
+ringGeo.rotateX(-Math.PI / 2);
+
+for (let i = 0; i < RPN; i++) {
+  const mesh = new T.Mesh(ringGeo, new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: T.DoubleSide }));
+  mesh.visible = false;
+  rippleGroup.add(mesh);
+  ripples.push({ mesh, life: 0, maxLife: 0, baseSize: 0, x: 0, z: 0 });
+}
+
+let rpIdx = 0;
+export function spawnRipple(x, z, size = 1.0, duration = 1.8) {
+  const r = ripples[rpIdx % RPN];
+  rpIdx++;
+  r.x = x;
+  r.z = z;
+  r.life = r.maxLife = duration;
+  r.baseSize = size;
+  r.mesh.visible = true;
+}
+
+export function updRipples(dt) {
+  for (const r of ripples) {
+    if (r.life <= 0) {
+      r.mesh.visible = false;
+      continue;
+    }
+    r.life -= dt;
+    const t = 1.0 - r.life / r.maxLife;
+    const s = r.baseSize * (0.1 + t * 5.5);
+    r.mesh.scale.set(s, 1, s);
+    r.mesh.position.set(r.x, fastH(r.x, r.z) + 0.05, r.z);
+    r.mesh.material.opacity = Math.max(0, 0.35 * (1.0 - t));
+  }
+}
+
+// Sistema de Micro-Espuma para Trilhas de Pesca (Fishing Wake)
+const FWN = 300, fwP = new Float32Array(FWN * 3), fwV = new Float32Array(FWN * 3), fwL = new Float32Array(FWN), fwG = new T.BufferGeometry();
+fwG.setAttribute('position', new T.BufferAttribute(fwP, 3));
+export const fwM = new T.Points(fwG, new T.PointsMaterial({ color: 0xffffff, size: 0.5, transparent: true, opacity: 0.6, fog: false }));
+fwM.frustumCulled = false;
+sc.add(fwM);
+
+let fwIdx = 0;
+export function spawnLineWake(x, z, vx, vz, strength = 1.0) {
+  // Dispara um par de partículas para formar o 'V'
+  for (let k = 0; k < 2; k++) {
+    const i = fwIdx++ % FWN;
+    fwP[i * 3] = x;
+    fwP[i * 3 + 1] = fastH(x, z) + 0.02;
+    fwP[i * 3 + 2] = z;
+    
+    // Velocidade lateral oposta (k=0 esquerda, k=1 direita) para abrir o cone
+    const side = k === 0 ? -1 : 1;
+    const speed = Math.hypot(vx, vz);
+    const nx = vx / (speed || 1);
+    const nz = vz / (speed || 1);
+    
+    fwV[i * 3] = vx * 0.4 + (-nz * side * speed * 0.15);
+    fwV[i * 3 + 1] = 0; // Mantém na superfície
+    fwV[i * 3 + 2] = vz * 0.4 + (nx * side * speed * 0.15);
+    fwL[i] = 0.5 + Math.random() * 0.4; // Vida curta
+  }
+}
+
+export function updLineWakes(dt) {
+  for (let i = 0; i < FWN; i++) {
+    if (fwL[i] <= 0) { fwP[i * 3 + 1] = -50; continue; }
+    fwL[i] -= dt;
+    fwP[i * 3] += fwV[i * 3] * dt;
+    fwP[i * 3 + 2] += fwV[i * 3 + 2] * dt;
+    // Atualiza Y para acompanhar as ondas
+    fwP[i * 3 + 1] = fastH(fwP[i * 3], fwP[i * 3 + 2]) + 0.02;
+  }
+  fwG.attributes.position.needsUpdate = true;
+}
+
+
 // Aves / Gaivotas 3D Low-Poly com Asas Articuladas sobre o arquipélago
 function createSeagull() {
   const g = new T.Group();
@@ -222,8 +349,20 @@ for (let i = 0; i < BCNT; i++) {
   });
 }
 
+let birdSoundTimer = 8 + Math.random() * 12;
+let hullWaveTimer = 1.1 + Math.random() * 1.5;
+let beachWaveTimer = 6 + Math.random() * 4;
+
 export function updBirds(dt) {
   const now = performance.now();
+  
+  birdSoundTimer -= dt;
+  if (birdSoundTimer <= 0) {
+    // 8 a 20 s
+    Audio.play(Math.random() < 0.3 ? 'bando' : 'gaivota', { vol: 0.15 });
+    birdSoundTimer = 8 + Math.random() * 12;
+  }
+
   for (let i = 0; i < BCNT; i++) {
     const b = gulls[i];
     b.ang += b.spd * dt;
@@ -257,6 +396,29 @@ sc.add(bsM);
 let bsIdx = 0;
 export function updBowSpray(dt, ch, sh) {
   const speed = Math.abs(ST.v);
+  
+  // Som de onda no casco: 1.1 a 2.6 s, só se estiver no barco e em velocidade
+  if (speed > .8) {
+    hullWaveTimer -= dt;
+    if (hullWaveTimer <= 0) {
+      Audio.play('onda_casco', { k: Math.min(1, speed / 8), vol: 0.3 });
+      hullWaveTimer = 1.1 + Math.random() * 1.5;
+    }
+  }
+
+  // Som de onda na praia: 6 a 10 s, perto de ilhas
+  beachWaveTimer -= dt;
+  if (beachWaveTimer <= 0) {
+    const ni = ILHAS.nearestIsland(ST.px, ST.pz);
+    if (ni) {
+      const dist = Math.hypot(ST.px - ni.x, ST.pz - ni.z);
+      if (dist < ni.r + 35) {
+        Audio.play('onda_praia', { vol: 0.25 });
+      }
+    }
+    beachWaveTimer = 6 + Math.random() * 4;
+  }
+
   if (speed > .8) {
     const rate = Math.min(8, Math.floor(speed * 3));
     for (let k = 0; k < rate; k++) {

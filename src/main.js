@@ -4,7 +4,7 @@ import { R, sc, cam, cv } from './core/renderer.js';
 import { S, WI, ST, SEAS, CAM, UIS, FX, FL, AN, INT, fp, keys, joy, lk, GAME, PL } from './core/state.js';
 import { setWaveDir, H, updSea } from './world/ocean.js';
 import { ILHAS } from './world/archipelago.js';
-import { updExtras, updSpeedFx, vn, updSun, updAtmosphere } from './world/weather.js';
+import { updExtras, updSpeedFx, vn, updSun, updAtmosphere, updSplashes, updRipples, updLineWakes } from './world/weather.js';
 import { ship, fl } from './ship/ship.js';
 import { updShipPhysics } from './ship/physics.js';
 import { setFpv, resetPlayer, updFPV, updGlow, updGlowHelm, qD, updInter, hud } from './ship/player.js';
@@ -13,6 +13,7 @@ import { isRadialMenuOpen, updateRadialSelectionByDirection, executeSelectedRadi
 import { fishManager } from './world/fish.js';
 import { fishingSystem } from './world/fishing.js';
 import { bestiaryModal } from './ui/BestiaryModal.js';
+import { Audio } from './core/audio.js';
 import './pwa.js';
 
 let fpsFrames = 0;
@@ -57,8 +58,17 @@ function requestMobileFullscreenAndLandscape() {
 }
 
 // Força tela cheia e orientação paisagem ao clicar/tocar em qualquer parte da tela
-window.addEventListener('pointerdown', requestMobileFullscreenAndLandscape, { passive: true });
-window.addEventListener('touchstart', requestMobileFullscreenAndLandscape, { passive: true });
+window.addEventListener('pointerdown', () => {
+  requestMobileFullscreenAndLandscape();
+  Audio.init();
+  Audio.resume();
+}, { passive: true });
+
+window.addEventListener('touchstart', () => {
+  requestMobileFullscreenAndLandscape();
+  Audio.init();
+  Audio.resume();
+}, { passive: true });
 
 export function startPlayTransition() {
   if (GAME.state !== 'MENU') return;
@@ -306,6 +316,9 @@ function loop(now) {
   updSpeedFx(dt);
   updAnchor(dt);
   updSun(dt);
+  updSplashes(dt);
+  updRipples(dt);
+  updLineWakes(dt);
   updAtmosphere(s, dt, now, vwx, vwz, avx, avz);
 
   // Balanço dinâmico do casco

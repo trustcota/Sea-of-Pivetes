@@ -3,6 +3,7 @@ import { rnd, clamp, wrapA } from '../core/math.js';
 import { sc } from '../core/renderer.js';
 import { H } from './ocean.js';
 import { ST } from '../core/state.js';
+import { spawnSplash, spawnRipple } from './weather.js';
 
 const T = THREE;
 
@@ -216,10 +217,11 @@ export function buildFish(S_in) {
 }
 
 /**
- * Propaga a onda senoidal através da espinha, nadadeiras e mandíbula
+ * Propaga a onda senoidal através da espinha, nadadeiras e mandíbula.
+ * Na curva, a cabeça (junta 0) lidera a nova direção e o corpo segue com propagação de onda hidrodinâmica.
  */
-export function swim(o, T, x = 1, a = 1) {
-  if (!o || !o.S) return;
+export function swim(o, T, x = 1, a = 1, turnRate = 0) {
+  if (!o || !o.S) return 1.0;
   const S = Object.assign({}, DEF, o.S);
   const n = S.n || 8;
   const sp = S.sp || 5;
@@ -234,11 +236,22 @@ export function swim(o, T, x = 1, a = 1) {
     const totalSegs = o.pv.length;
     o.pv.forEach((p, i) => {
       const segRatio = totalSegs > 1 ? i / (totalSegs - 1) : 0;
-      p.rotation.y = a * am * Math.pow(segRatio, st) * Math.sin(w - i * ph);
+      
+      // Na cadeia hierárquica de juntas: a cabeça (i=0) vira primeiro liderando a curva,
+      // e os segmentos seguintes atenuam a rotação acumulada para o corpo seguir a cabeça
+      let turnFlex = 0;
+      if (i === 0) {
+        turnFlex = turnRate * 0.18; // Cabeça aponta para a direção da curva
+      } else {
+        turnFlex = -turnRate * 0.035; // Corpo e cauda acompanham em onda suave
+      }
+
+      p.rotation.y = turnFlex + a * am * Math.pow(segRatio, st) * Math.sin(w - i * ph);
     });
   }
   if (o.tl) {
-    o.tl.rotation.y = a * am * 2.2 * Math.sin(w - n * ph);
+    const turnTailOffset = -turnRate * 0.08;
+    o.tl.rotation.y = turnTailOffset + a * am * 2.2 * Math.sin(w - n * ph);
   }
   if (o.rip) {
     o.rip.forEach(([m, i]) => {
@@ -247,12 +260,18 @@ export function swim(o, T, x = 1, a = 1) {
   }
   if (o.pf) {
     o.pf.forEach(([h, s]) => {
-      h.rotation.x = s * (Math.PI / 2 + dr + fl * Math.sin(w * .6));
+      // Nadadeira peitoral do lado interno da curva abre para atuar como leme/freio hidrodinâmico
+      const innerFinDrag = (s * turnRate > 0) ? Math.abs(turnRate) * 0.22 : 0;
+      h.rotation.x = s * (Math.PI / 2 + dr + fl * Math.sin(w * .6) + innerFinDrag);
     });
   }
   if (o.jv) {
     o.jv.rotation.z = -(.1 + .09 * Math.sin(w * .5));
   }
+
+  // Fator de impulso procedural (pulse) gerado pelo batimento da cauda
+  const thrustPulse = 0.75 + 0.5 * Math.pow(Math.abs(Math.cos(w)), 1.5);
+  return thrustPulse;
 }
 
 /**
@@ -377,9 +396,12 @@ export class FishWorldManager {
       baseDepth,
       heading: Math.random() * Math.PI * 2,
       speed: rnd(2.5, 4.5),
+      currentSpeed: rnd(2.5, 4.5),
       animPhase: Math.random() * 100,
       isFlying: false,
       flyTime: 0,
+      jumpVy: 0,
+      jumpY: 0,
       jumpCooldown: rnd(20, 60),
       jumpDuration: rnd(1.2, 2.0)
     };
@@ -430,53 +452,81 @@ export class FishWorldManager {
         }
       }
 
-      // 2. Animação de natação (com LOD de distância)
+      // Taxa de giro da direção (turnRate)
+      const turnRate = Math.sin(timeSec * 0.35 + f.animPhase);
+      f.heading += turnRate * dt * 0.22;
+
+      // 2. Animação de natação com curvatura da espinha e impulso da cauda
+      let thrustPulse = 1.0;
       if (distToPlayer < 120) {
-        swim(fishObj, timeSec * f.speed, 1, 1);
+        thrustPulse = swim(fishObj, timeSec * f.speed, 1, 1, turnRate);
       }
 
-      // 3. Saltos de peixes velozes
+      // 3. Saltos balísticos físicos com gravidade de peixes velozes
       const canJump = (speciesId === 'dourado' || speciesId === 'atum' || speciesId === 'espada');
       if (canJump) {
         f.jumpCooldown -= dt;
         if (!f.isFlying && f.jumpCooldown <= 0) {
           f.isFlying = true;
-          f.jumpDuration = rnd(1.2, 1.8);
-          f.flyTime = f.jumpDuration;
+          f.jumpVy = rnd(3.8, 5.2);
+          f.jumpY = 0;
           f.jumpCooldown = rnd(25, 70);
+          spawnSplash(f.wx, f.wz, 15, 1.2);
+          spawnRipple(f.wx, f.wz, 1.5);
+          if (window.fishingSystem && window.fishingSystem.playSfx && distToPlayer < 80) {
+            window.fishingSystem.playSfx('splash');
+          }
         }
 
         if (f.isFlying) {
-          f.flyTime -= dt;
-          const progress = 1 - (f.flyTime / f.jumpDuration);
+          f.jumpVy -= 9.81 * dt;
+          f.jumpY += f.jumpVy * dt;
           const waterY = H(f.wx, f.wz);
-          const flyHeight = Math.sin(progress * Math.PI) * 1.6;
-          
-          group.position.y = waterY + flyHeight;
-          group.rotation.x = -Math.cos(progress * Math.PI) * 0.5;
 
-          if (f.flyTime <= 0) {
+          group.position.y = waterY + Math.max(0, f.jumpY);
+          group.rotation.x = -Math.atan2(f.jumpVy, Math.max(1, f.currentSpeed || f.speed));
+
+          if (f.jumpY <= 0 && f.jumpVy < 0) {
             f.isFlying = false;
+            f.jumpY = 0;
             group.rotation.x = 0;
+            spawnSplash(f.wx, f.wz, 15, 1.0);
+            spawnRipple(f.wx, f.wz, 1.2);
+            if (window.fishingSystem && window.fishingSystem.playSfx && distToPlayer < 80) {
+              window.fishingSystem.playSfx('splash');
+            }
           }
         }
       }
 
-      // 4. Dinâmica no mar
+      // 4. Dinâmica no mar e alinhamento com a inclinação (normal) das ondas
       if (!f.isFlying) {
         const waterY = H(f.wx, f.wz);
         const targetY = waterY - f.baseDepth;
         group.position.y += (targetY - group.position.y) * dt * 5.0;
 
-        f.heading += Math.sin(timeSec * 0.35 + f.animPhase) * dt * 0.22;
+        // Amostragem de altura nas proximidades para calcular inclinação da onda
+        const sampleDist = 0.8;
+        const hFwd = H(f.wx + Math.sin(f.heading) * sampleDist, f.wz + Math.cos(f.heading) * sampleDist);
+        const hRight = H(f.wx + Math.cos(f.heading) * sampleDist, f.wz - Math.sin(f.heading) * sampleDist);
+        const wavePitch = Math.atan2(hFwd - waterY, sampleDist);
+        const waveRoll = Math.atan2(hRight - waterY, sampleDist);
+
+        // Inclinação hidrodinâmica (banking/roll) ao fazer curvas
+        const turnBanking = -turnRate * 0.18;
+
         group.rotation.y = f.heading - Math.PI / 2;
-        group.rotation.z = Math.sin(timeSec * 3 + f.animPhase) * 0.05;
-        group.rotation.x = 0;
+        group.rotation.x = wavePitch * 0.45;
+        group.rotation.z = waveRoll * 0.45 + turnBanking + Math.sin(timeSec * 3 + f.animPhase) * 0.04;
       }
 
-      const moveSpd = f.isFlying ? f.speed * 1.5 : f.speed;
-      f.wx += Math.sin(f.heading) * moveSpd * dt;
-      f.wz += Math.cos(f.heading) * moveSpd * dt;
+      // Acoplamento da velocidade linear com o impulso procedural da cauda
+      const targetSpeed = f.isFlying ? f.speed * 1.5 : f.speed * thrustPulse;
+      if (!f.currentSpeed) f.currentSpeed = f.speed;
+      f.currentSpeed += (targetSpeed - f.currentSpeed) * Math.min(1, dt * 5.0);
+
+      f.wx += Math.sin(f.heading) * f.currentSpeed * dt;
+      f.wz += Math.cos(f.heading) * f.currentSpeed * dt;
 
       group.position.x = f.wx - playerX;
       group.position.z = f.wz - playerZ;
