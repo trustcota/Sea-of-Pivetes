@@ -30,14 +30,14 @@ rain.frustumCulled = false;
 sc.add(rain);
 
 // Riscos de vento: partículas de ar levadas pelo vento aparente (estilo Sea of Thieves)
-const NSK = 65, skA = new Float32Array(NSK * 3), skP = new Float32Array(NSK * 6), skG = new T.BufferGeometry();
+const NSK = 180, skA = new Float32Array(NSK * 3), skP = new Float32Array(NSK * 6), skG = new T.BufferGeometry();
 for (let i = 0; i < NSK; i++) {
-  skA[i * 3] = rnd(-50, 50);
-  skA[i * 3 + 1] = rnd(2.0, 22.0); // Mantém as partículas flutuando em uma boa altitude visual
-  skA[i * 3 + 2] = rnd(-50, 50);
+  skA[i * 3] = rnd(-55, 55);
+  skA[i * 3 + 1] = rnd(1.0, 16.0); // Faixa de altura do convés e mastros
+  skA[i * 3 + 2] = rnd(-55, 55);
 }
 skG.setAttribute('position', new T.BufferAttribute(skP, 3));
-export const skM = new T.LineSegments(skG, new T.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: .12, fog: false }));
+export const skM = new T.LineSegments(skG, new T.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: .35, fog: false }));
 skM.frustumCulled = false;
 sc.add(skM);
 
@@ -423,24 +423,24 @@ export function updBowSpray(dt, ch, sh) {
     beachWaveTimer = 6 + Math.random() * 4;
   }
 
-  if (speed > .8) {
+  if (speed > .6) {
     const shipRelX = ST.px - (REF ? REF.x : ST.px);
     const shipRelZ = ST.pz - (REF ? REF.z : ST.pz);
-    const rate = Math.min(8, Math.floor(speed * 3));
+    const rate = Math.min(14, Math.floor(speed * 3.8));
     for (let k = 0; k < rate; k++) {
       const i = bsIdx++ % BSP;
       const side = (k % 2 === 0 ? 1 : -1);
-      const lx = side * rnd(.4, 1.1), ly = rnd(.2, .6), lz = 4.6 + rnd(0, .8);
+      const lx = side * rnd(.4, 1.2), ly = rnd(.2, .7), lz = 4.6 + rnd(0, .8);
       const worldX = lx * ch + lz * sh + ST.px;
       const worldZ = lz * ch - lx * sh + ST.pz;
       bsP[i * 3] = shipRelX + lx * ch + lz * sh;
       bsP[i * 3 + 1] = fastH(worldX, worldZ) + ly;
       bsP[i * 3 + 2] = shipRelZ + lz * ch - lx * sh;
 
-      bsV[i * 3] = (side * rnd(.8, 2.2) * ch + rnd(-.4, .4)) * (speed * .25);
-      bsV[i * 3 + 1] = rnd(1.8, 3.8) + speed * .15;
-      bsV[i * 3 + 2] = (-side * rnd(.8, 2.2) * sh + rnd(-.4, .4)) * (speed * .25);
-      bsL[i] = rnd(.4, .85);
+      bsV[i * 3] = (side * rnd(1.2, 3.2) * ch + rnd(-.4, .4)) * (speed * .28);
+      bsV[i * 3 + 1] = rnd(2.0, 4.8) + speed * .18;
+      bsV[i * 3 + 2] = (-side * rnd(1.2, 3.2) * sh + rnd(-.4, .4)) * (speed * .28);
+      bsL[i] = rnd(.45, .95);
     }
   }
 
@@ -465,7 +465,7 @@ export function updBowSpray(dt, ch, sh) {
 
 
 // Riscos de velocidade na água (fixos no mundo): passam pelo casco e dão noção de deslocamento
-const NSP = 380, spP = new Float32Array(NSP * 6), spA = new Float32Array(NSP * 2), spG = new T.BufferGeometry();
+const NSP = 480, spP = new Float32Array(NSP * 6), spA = new Float32Array(NSP * 2), spG = new T.BufferGeometry();
 for (let i = 0; i < NSP; i++) {
   spA[i * 2] = rnd(-70, 70);
   spA[i * 2 + 1] = rnd(-70, 70);
@@ -477,8 +477,8 @@ sc.add(spM);
 
 export function updSpeedFx(dt) {
   const sp = Math.hypot(ST.svx, ST.svz);
-  FX.SPD += (clamp((sp - 1.2) / 6, 0, 1) - FX.SPD) * (1 - Math.exp(-dt * 2));
-  const L = .6 + sp * .55, ux = sp > .01 ? ST.svx / sp : 0, uz = sp > .01 ? ST.svz / sp : 1;
+  FX.SPD += (clamp((sp - 0.8) / 5.5, 0, 1) - FX.SPD) * (1 - Math.exp(-dt * 2.5));
+  const L = 1.0 + sp * 0.85, ux = sp > .01 ? ST.svx / sp : 0, uz = sp > .01 ? ST.svz / sp : 1;
   for (let i = 0; i < NSP; i++) {
     let x = spA[i * 2] - ST.svx * dt, z = spA[i * 2 + 1] - ST.svz * dt;
     if (x > 70) x -= 140; else if (x < -70) x += 140;
@@ -494,7 +494,7 @@ export function updSpeedFx(dt) {
     spP[j + 5] = z2;
   }
   spG.attributes.position.needsUpdate = true;
-  spM.material.opacity = .55 * FX.SPD;
+  spM.material.opacity = .80 * FX.SPD;
 }
 
 // Ruído de valor (usado nas rajadas de vento)
@@ -742,14 +742,14 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   cam.getWorldPosition(wp);
   rain.position.set(wp.x, 0, wp.z);
 
-  // Riscos de vento (estilo Sea of Thieves: brisas mais longas, suaves e espaçadas de tempos em tempos)
-  const am = Math.hypot(avx, avz) + .001, tl = Math.min(2.5, .35 + am * .08);
-  const windWave = 0.4 + 0.6 * Math.sin(now * 0.0006); // Onda senoidal lenta para vinda/ida das brisas
+  // Riscos de vento (estilo Sea of Thieves: brisas mais longas, nítidas e direcionadas fluindo pelo convés)
+  const am = Math.hypot(avx, avz) + .001, tl = Math.min(9.0, 2.5 + am * .45);
+  const windWave = 0.5 + 0.5 * Math.sin(now * 0.0008); // Ondulação suave da brisa
   for (let i = 0; i < NSK; i++) {
     const o = i * 3;
     let x = skA[o] + avx * dt, z = skA[o + 2] + avz * dt;
-    if (x > 50) x -= 100; else if (x < -50) x += 100;
-    if (z > 50) z -= 100; else if (z < -50) z += 100;
+    if (x > 55) x -= 110; else if (x < -55) x += 110;
+    if (z > 55) z -= 110; else if (z < -55) z += 110;
     skA[o] = x;
     skA[o + 2] = z;
     const y = skA[o + 1], j = i * 6;
@@ -760,9 +760,12 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
     skP[j + 4] = y;
     skP[j + 5] = z - avz / am * tl;
   }
-  const activeLines = Math.floor(NSK * clamp(0.1 + WI.s * 0.4, 0, 1) * (0.2 + 0.8 * windWave));
+  const activeLines = Math.floor(NSK * clamp(0.25 + WI.s * 0.5, 0, 1) * (0.4 + 0.6 * windWave));
   skG.setDrawRange(0, activeLines * 2);
   skG.attributes.position.needsUpdate = true;
   skM.position.set(wp.x, 0, wp.z);
-  skM.material.opacity = (0.04 + 0.12 * clamp(WI.wsp / 12, 0, 1)) * windWave;
+  skM.material.opacity = (0.15 + 0.25 * clamp(WI.wsp / 12, 0, 1)) * (0.6 + 0.4 * windWave);
+
+  // Áudio procedural de vento contínuo proporcional à velocidade e rajadas
+  Audio.updateWind(am + Math.abs(ST.v) * 0.6, WI.wsp / 10);
 }

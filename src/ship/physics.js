@@ -49,7 +49,7 @@ export function updShipPhysics(dt, sw, gu, wang, vwx, vwz) {
   // Rotação suave das vergas e abertura das velas
   for (const g of SH.rigs) {
     g.a += (g.t - g.a) * (1 - Math.exp(-dt * 2.2));
-    if (g.piv) g.piv.rotation.y = -g.a;
+    if (g.piv) g.piv.rotation.y = g.a;
   }
   
   // Log de depuração (limitado para evitar inundar o console)
@@ -91,45 +91,95 @@ export function updShipPhysics(dt, sw, gu, wang, vwx, vwz) {
     const a = x.rg.a, Ar = x.ar * x.d;
 
     let nx, nz, fx, fz, fn;
+    const ux = wx / W, uz = wz / W; // Vetor unitário do vento aparente
+    let thrustEfficiency = 0;
+    let lateralFactor = 0;
+    let pressure = 0;
+
     if (x.sq) {
+      // Velas Redondas / Vergas (Mastro Grande, Gávea, Joanete)
       nx = Math.sin(a); nz = Math.cos(a);
+      // Produto escalar: >0 vento batendo por trás da vela (empurrando para frente)
+      // <0 vento batendo de frente contra a vela (empurrando para trás contra o mastro)
+      const alignment = ux * nx + uz * nz;
+      const tanFlow = ux * nz - uz * nx;
+
+      if (alignment >= 0) {
+        // Vento favorável (vento soprando pelas costas da vela):
+        // Empurra a lona para FRENTE (+Z)
+        const catchBonus = Math.pow(alignment, 1.2);
+        thrustEfficiency = 0.55 + 0.65 * catchBonus; // Varia de 0.55 a 1.20
+        lateralFactor = tanFlow * 0.35;
+        // Pressão normal POSITIVA: estufa a vela para a frente
+        pressure = 0.30 + 0.70 * catchBonus;
+      } else {
+        // Vento desfavorável / de proa (vento batendo DE FRENTE contra a vela):
+        // Empurra a lona para TRÁS (-Z, contra o mastro)
+        const tackingAlignment = Math.abs(tanFlow);
+        thrustEfficiency = 0.42 + 0.42 * Math.pow(tackingAlignment, 1.3);
+        lateralFactor = -Math.sign(a || 1) * 0.25;
+        // Pressão normal NEGATIVA: deforma a lona para trás em direção ao mastro
+        // alignment é negativo (ex: -1.0 com vento de proa puro)
+        pressure = alignment * (0.35 + 0.55 * Math.abs(alignment));
+      }
+      x.tanTarget = clamp(tanFlow, -1, 1);
     } else {
+      // Velas Triangulares / Estais (Bujarrona na proa e Mezena na popa)
       nx = Math.cos(a); nz = -Math.sin(a);
+      // Fluxo transversal ao pano longitudinal da vela
+      const crossFlow = ux * Math.cos(a) + uz * Math.sin(a);
+      const absCross = Math.abs(crossFlow);
+      const headwindForward = uz < 0 ? 0.48 : (0.55 + 0.45 * Math.max(0, uz));
+      thrustEfficiency = headwindForward * (0.6 + 0.5 * absCross);
+      lateralFactor = (ux * nz - uz * nx) * 0.4;
+      
+      // A lona estufa para bombordo ou estibordo de acordo com o lado de onde o vento sopra
+      const side = absCross > 0.05 ? Math.sign(crossFlow) : (a !== 0 ? Math.sign(a) : 1);
+      pressure = side * (0.30 + 0.70 * Math.min(1, absCross * 1.5));
+      x.tanTarget = 0;
     }
 
-    const q = wx * nx + wz * nz, s = q < 0 ? -1 : 1, sn = Math.min(1, Math.abs(q) / W);
-    if (!x.sq && -wx * Math.sin(a) - wz * Math.cos(a) < 0) {
-      const pr = .6 * q * Math.abs(q);
-      fx = pr * nx; fz = pr * nz; fn = pr;
-    } else {
-      const al = Math.asin(sn), cA = Math.max(.05, Math.cos(al)),
-        CL = (x.sq ? 1.25 : 1.6) * Math.sin(2 * Math.min(al, .35)) * (al < .5 ? 1 : Math.max(.25, 1 - (al - .5) * 1.4)),
-        CD = (x.sq ? .3 : .28) + 1.1 * sn * sn,
-        ux = wx / W, uz = wz / W,
-        lx = (s * nx - ux * sn) / cA, lz = (s * nz - uz * sn) / cA,
-        k = x.sq ? (q < 0 ? .1 : .8) : .55;
-      fx = k * W * W * (CL * lx + CD * ux);
-      fz = k * W * W * (CL * lz + CD * uz);
-      fn = fx * nx + fz * nz;
-    }
+    // Força para frente (fz) e lateral (fx): sempre positiva para frente com velas abertas (estilo SoT)
+    const dynPressure = W * W;
+    fz = dynPressure * thrustEfficiency * 0.75;
+    fx = dynPressure * lateralFactor * 0.45;
+    fn = dynPressure * pressure;
 
-    x.pt = clamp(fn / 60, -1, 1);
-    x.fl = .12 + .9 * clamp(1 - Math.abs(wx * nx + wz * nz) / (W * .4), 0, 1) * clamp(W / 5, .25, 1.2) + .3 * WI.s;
+    x.pt = clamp(pressure, -1, 1);
+    // Bater de panos (flapping): aumenta fortemente quando o vento bate contra a vela ou desfavorável
+    const windAlignmentFactor = x.sq ? (ux * nx + uz * nz) : 0;
+    const isLuffing = windAlignmentFactor < 0.2;
+    x.fl = .10 + .75 * clamp(1 - Math.max(0, windAlignmentFactor), 0, 1) * clamp(W / 5, .25, 1.2) + (isLuffing ? .25 : 0) + .2 * WI.s;
     Fx += Ar * fx; Fz += Ar * fz; Mh += Ar * fx * yc; Ty += Ar * fx * (sp[2] - .3); AT += x.ar;
     if (x.d > .2 && Math.abs(x.pt) < .1) lf++;
-    x.ps += (x.pt - x.ps) * (1 - Math.exp(-dt * 2.2));
-    x.upd(SEAS.wt, x.ps, x.fl);
+    x.ps += (x.pt - x.ps) * (1 - Math.exp(-dt * 2.8));
+    if (x.tan === undefined) x.tan = 0;
+    x.tan += ((x.tanTarget || 0) - x.tan) * (1 - Math.exp(-dt * 2.8));
+    x.upd(SEAS.wt, x.ps, x.fl, x.tan);
   }
   ST.fl = lf;
 
   const spl = Math.abs(ST.heel) > .35 ? Math.max(.03, 1 - (Math.abs(ST.heel) - .35) * 4) : 1;
   const eff = Math.cos(clamp(ST.heel * 1.6, -1.2, 1.2)) * spl;
-  const kF = .0052, ar0 = Math.abs(ST.v), Vw2 = ST.v * ST.v + ST.sw * ST.sw, al = Math.atan2(Math.abs(ST.sw), ar0 + .3);
+  const kF = .0085, ar0 = Math.abs(ST.v), Vw2 = ST.v * ST.v + ST.sw * ST.sw, al = Math.atan2(Math.abs(ST.sw), ar0 + .3);
   const CLk = 3.2 * Math.sin(al) * (al < .35 ? 1 : Math.max(.3, 1 - (al - .35) * 1.8));
   const Fk = .02 * Vw2 * CLk;
 
-  const acc = kF * Fz * eff / AT - (.003 * ar0 + .001 * (1 + .6 * sw) * ar0 * ar0 + .09 * Math.pow(Math.max(0, ar0 - 6), 2) + .22 * Math.pow(Math.max(0, ar0 - 7.5), 3) + .01 * Math.abs(HM.a) * ar0 * ar0) * Math.sign(ST.v) - Fk * Math.sin(al) * Math.sign(ST.v) - (hb - hs) / 10 * .22 - .004 * SEAS.amp * SEAS.amp * .5 * (1 - (sh * Math.sin(wang) + ch * Math.cos(wang))) * ar0 * Math.sign(ST.v);
-  ST.v = clamp(ST.v + (acc + ST.sw * ST.r) * dt, -1.5, 12);
+  // Resistência hidrodinâmica do casco rebalanceada:
+  // Permite velocidades naturais entre 8 e 15 nós sem travar em 5-6 nós
+  const waveDrag = .015 * Math.pow(Math.max(0, ar0 - 7.5), 2) + .03 * Math.pow(Math.max(0, ar0 - 9.0), 3);
+  const hullDrag = (.0025 * ar0 + .0008 * (1 + .4 * sw) * ar0 * ar0 + waveDrag + .008 * Math.abs(HM.a) * ar0 * ar0) * Math.sign(ST.v);
+  const waveResist = (hb - hs) / 10 * .18 + .003 * SEAS.amp * SEAS.amp * .5 * (1 - (sh * Math.sin(wang) + ch * Math.cos(wang))) * ar0 * Math.sign(ST.v);
+
+  const forwardThrust = (AT > 0.1) ? (kF * Fz * eff / AT) : 0;
+  const acc = forwardThrust - hullDrag - Fk * Math.sin(al) * Math.sign(ST.v) - waveResist;
+
+  // Com velas abertas gerando propulsão e âncora recolhida, o navio sempre avança
+  let newV = ST.v + (acc + ST.sw * ST.r) * dt;
+  if (forwardThrust > 0 && newV < 0 && AN.d < 0.5) {
+    newV = Math.max(0, newV + dt * 0.8);
+  }
+  ST.v = clamp(newV, -1.0, 16.0);
   ST.sw += (kF * Fx * eff / AT - (ST.sw > 0 ? 1 : -1) * Fk * Math.cos(al) - .1 * ST.sw - .25 * ST.sw * Math.abs(ST.sw) - ST.v * ST.r) * dt;
 
   // Arrasto e retenção da âncora

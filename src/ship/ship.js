@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { D2 } from '../core/math.js';
+import { clamp, D2 } from '../core/math.js';
 import { HM, AN } from '../core/state.js';
 import { sc } from '../core/renderer.js';
 
@@ -171,7 +171,7 @@ export const SH = (() => {
   const rig = (name, z, lim, grp) => { const piv = grp ? new T.Group() : null; if (piv) { piv.position.set(0, 0, z); ship.add(piv) } const r = { name, z, piv, a: 0, t: 0, lim: lim * D2 }; rigs.push(r); return r };
   const sq = (name, rg, y, w, h, top, yb, ix) => {
     if (!rg.ri) { rg.ri = 1; [1, -1].forEach(k => inter.push({ t: 'rot', rg, k, pos: rail(k, rg.z - 2.2), label: 'Braço · mastro ' + rg.name })) }
-    const z = rg.z, P2 = rg.piv, g = grid(NX, NY), p = g.attributes.position, uv = g.attributes.uv, n = p.count, m = add(g, M('#ffffff', { vertexColors: true }), 0, 0, .3, P2), hl = w / 2 + .4; m.frustumCulled = false;
+    const z = rg.z, P2 = rg.piv, g = grid(NX, NY), p = g.attributes.position, uv = g.attributes.uv, n = p.count, m = add(g, M('#ffffff', { vertexColors: true, flatShading: false }), 0, 0, .3, P2), hl = w / 2 + .4; m.frustumCulled = false;
     [1, -1].forEach(k => { cyl(.1, .05, hl, 8, wood, k * hl / 2, y, .3, P2).rotation.z = k * Math.PI / 2; box(.16, .16, .16, gold, k * hl, y, .3, P2) });
     box(.22, .22, .4, dark, 0, y, .14, P2);
     const bun = add(new T.CylinderGeometry(1, 1, 1, 10), sailM, 0, y, .46, P2); bun.rotation.z = Math.PI / 2;
@@ -202,20 +202,34 @@ export const SH = (() => {
     
     const LF = [dr(.022), dr(.022)], BR = (ix === 0) ? [own(dr(.026, rR)), own(dr(.026, rR))] : [], CL = [own(dr(.022, gR)), own(dr(.022, gR))], SS = [dr(.03), dr(.03)], BU = own(dr(.022, gR)), HY = own(dr(.02, gR));
     const so = {
-      name, d: 0, t: 0, upd(tt, wd, fs) {
-        const d = this.d, a = rg.a, c = Math.cos(a), s2 = Math.sin(a), W2 = (x, y, zl) => V(x * c - zl * s2, y, x * s2 + zl * c + z);
-        const hh = Math.max(.001, h * d), bl = (wd < 0 ? -1 : 1) * (.12 + .88 * Math.abs(wd)) * .1 * w * Math.pow(d, .6), fa = (.02 + .1 * fs) * Math.min(1, d * 1.5), ph = z * 1.7 + y, on = d > .015;
+      name, d: 0, t: 0, upd(tt, wd, fs, tan = 0) {
+        const d = this.d, a = rg.a, c = Math.cos(a), s2 = Math.sin(a), W2 = (x, y, zl) => V(x * c + zl * s2, y, -x * s2 + zl * c + z);
+        const hh = Math.max(.001, h * d);
+        // Direção e magnitude da deformação pelo vento (reduzida pela metade):
+        // wd > 0: vento batendo pelas costas -> estufa para a FRENTE (+Z)
+        // wd < 0: vento batendo de frente -> empurra a lona para TRÁS (-Z, contra o mastro)
+        const isInflated = Math.abs(wd) > 0.35;
+        const billowBoost = isInflated ? (1.0 + (Math.abs(wd) - 0.35) * 0.9) : (0.4 + 0.6 * Math.abs(wd));
+        const bl = Math.sign(wd || 1) * (0.12 * w) * Math.pow(d, 0.72) * billowBoost;
+        const fa = (.012 + .06 * fs) * Math.min(1, d * 1.5), ph = z * 1.7 + y, on = d > .015;
         m.visible = on; [BU, ...CL, ...SS].forEach(o => o.visible = on);
         for (let i = 0; i < n; i++) {
           const u = uv.getX(i), t = 1 - uv.getY(i);
-          const vx = (u - .5) * w * (.8 + .2 * t);
-          let vz = bl * Math.sin(Math.PI * u) * Math.pow(Math.sin(Math.PI * (.08 + .84 * t)), .7) * Math.min(1, .3 + 2.4 * t) + fa * t * Math.sin(u * 9 + t * 6 - tt * 3.4 + ph);
+          // O pico do bojo desloca lateralmente de acordo com o vento incidente angular (tan)
+          const uShifted = clamp(u - tan * 0.07 * (1 - t * 0.4), 0, 1);
+          const belly = Math.sin(Math.PI * uShifted) * Math.sin(Math.PI * (0.04 + 0.88 * t)) * (0.35 + 0.85 * Math.pow(t, 0.65));
+          // Tensão do pano nas laterais ao inflar
+          const widthPull = 1 - 0.04 * Math.pow(belly, 1.4);
+          const vx = (u - .5) * w * (.8 + .2 * t) * widthPull;
+          // Ondulação / flapping de lona tesa ou batendo solta no vento contrário
+          const flutter = fa * t * Math.sin(u * 9 + t * 6 - tt * 3.4 + ph);
+          let vz = bl * belly + flutter;
           
-          // Colisão realista com o cilindro do mastro
+          // Colisão com o mastro: se o vento empurra a lona para trás (vz < 0), ela encosta e amassa no mastro
           const rCol = 0.22 * (1 - 0.3 * t);
           const zRel = vz + 0.3;
           if (Math.abs(vx) < rCol) {
-            const zLimit = Math.sqrt(rCol * rCol - vx * vx);
+            const zLimit = Math.sqrt(Math.max(0, rCol * rCol - vx * vx));
             if (zRel < zLimit) {
               vz = zLimit - 0.3;
             }
@@ -223,6 +237,7 @@ export const SH = (() => {
           p.setXYZ(i, vx, y - t * hh, vz);
         }
         p.needsUpdate = true;
+        g.computeVertexNormals();
         const rr = .09 + .11 * (1 - d) * h / 1.5; bun.visible = d < .985; bun.scale.set(rr, w * .88, rr); bun.position.y = y - rr * .7;
         const yc = W2(0, y, .3), ib = n - 1 - NX / 2;
         [1, -1].forEach((k, j) => {
@@ -236,7 +251,7 @@ export const SH = (() => {
   };
   const tr = (name, rg, tk, hd, cw, ph, o) => {
     if (!rg.ri) { rg.ri = 1; [1, -1].forEach(k => inter.push({ t: 'rot', rg, k, pos: rail(k, o.az), label: 'Escota · ' + rg.name })) }
-    const g = grid(14, 14), p = g.attributes.position, uv = g.attributes.uv, n = p.count, m = add(g, M('#ffffff', { vertexColors: true })); m.frustumCulled = false;
+    const g = grid(14, 14), p = g.attributes.position, uv = g.attributes.uv, n = p.count, m = add(g, M('#ffffff', { vertexColors: true, flatShading: false })); m.frustumCulled = false;
     const a = V(...tk), mastTop = o.mastTop ? V(...o.mastTop) : V(...o.bk), bk = V(...o.bk);
     if (o.mastTop) {
       const tStay = (a.z - bk.z) / (a.z - mastTop.z);
@@ -249,8 +264,12 @@ export const SH = (() => {
     box(.14, .14, .14, iron, bk.x, bk.y, bk.z); box(.18, .1, .12, iron, ...o.ck); const hs = own(dr(.02, gR)); setR(hs, bk, V(...o.ck));
     const so = {
       name, d: 0, t: 0, upd(tt, wd, fs) {
-        const d = this.d, bl = (wd < 0 ? -1 : 1) * (.12 + .88 * Math.abs(wd)) * .5 * Math.pow(d, .6), fa = (.03 + .14 * fs) * Math.min(1, d * 1.5), cs = Math.cos(rg.a), sn = Math.sin(rg.a), on = d > .015;
-        const dx = cF.x - a.x, dz = cF.z - a.z; cb.set(a.x + dx * cs + dz * sn, cF.y, a.z - dx * sn + dz * cs);
+        const d = this.d;
+        const isInflated = Math.abs(wd) > 0.4;
+        const billowBoost = isInflated ? (1.0 + (Math.abs(wd) - 0.4) * 0.8) : (0.5 + 0.6 * Math.abs(wd));
+        const bl = Math.sign(wd || 1) * 0.675 * Math.pow(d, 0.7) * billowBoost;
+        const fa = (.015 + .05 * fs) * Math.min(1, d * 1.5), cs = Math.cos(rg.a), sn = Math.sin(rg.a), on = d > .015;
+        const dx = cF.x - a.x, dz = cF.z - a.z; cb.set(a.x + dx * cs - dz * sn, cF.y, a.z + dx * sn + dz * cs);
         if (!o.boom) {
           const yBowsprit = a.y - (a.z - cb.z) * 0.39 + 0.14;
           cb.y = cF.y * d + yBowsprit * (1 - d);
@@ -271,14 +290,17 @@ export const SH = (() => {
         });
         for (let i = 0; i < n; i++) {
           const u = uv.getX(i), t = uv.getY(i); Lp.copy(a).lerp(h2, t); Rp.copy(c2).lerp(h2, t); Lp.lerp(Rp, u);
-          p.setXYZ(i, Lp.x + bl * Math.sin(Math.PI * u) * (1 - .45 * t) + fa * u * Math.sin(u * 8 + t * 5 - tt * 3.6 + ph), Lp.y, Lp.z)
+          const belly = Math.sin(Math.PI * u) * Math.sin(Math.PI * (0.08 + 0.84 * t));
+          const flutter = fa * u * Math.sin(u * 8 + t * 5 - tt * 3.6 + ph);
+          p.setXYZ(i, Lp.x + bl * belly + flutter, Lp.y, Lp.z);
         }
         p.needsUpdate = true;
+        g.computeVertexNormals();
         [1, -1].forEach((k, j) => setR(SS[j], c2, rail(k, o.az))); if (BM) setR(BM, a, cb)
       }
     }; so.rg = rg; so.rop = SS; so.hr = hs; so.sq = 0; so.ar = .5 * V().crossVectors(hF.clone().sub(a), cF.clone().sub(a)).length(); so.ps = 0; so.pt = 0; so.fl = .1; so.gl = [G(m, 's'), G(bun, 's'), G(hs, 'h'), G(HY, 'h'), ...GR.map(o => G(o, 'h')), ...SS.map(o => G(o, 'r'))]; sails.push(so); inter.push({ t: 'hoist', sail: so, pos: V(...o.ck), label: 'Talha · ' + name })
   };
-  const rM = rig('Principal', .2, 60, 1), rZ = rig('Mezena', -3.3, 75, 0), rJ = rig('Bujarrona', 0, 65, 0);
+  const rM = rig('Principal', .2, 60, 1), rZ = rig('Mezena', -3.3, 32, 0), rJ = rig('Bujarrona', 0, 25, 0);
   tr('Bujarrona', rJ, [0, 3.1, 9], [0, 7.1, 3.9], [0, 3.2, 5.9], 0, { bk: [0, 7.1, 3.9], ck: [0, 1.48, 4.7], az: 4.7, mastTop: [0, 9.8, .2] });
   // Suporte de madeira interligando as duas cordas de rotação da vela frontal (Bujarrona)
   box(1.68, 0.07, 0.18, dark, 0, 1.48, 4.7);

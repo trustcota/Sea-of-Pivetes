@@ -422,10 +422,17 @@ function loop(now) {
   }
 
   // Efeito FOV de velocidade e Luneta
-  const targetFov = playerEquipment.isSpyglassActive() ? 14 : (60 + 13 * FX.SPD * FX.SPD);
+  const targetFov = playerEquipment.isSpyglassActive() ? 14 : (60 + 12 * FX.SPD);
   if (Math.abs(cam.fov - targetFov) > .05) {
     cam.fov += (targetFov - cam.fov) * Math.min(1, dt * 9);
     cam.updateProjectionMatrix();
+  }
+
+  // Microvibração de alta velocidade no convés (sensação tátil ao cortar o mar)
+  if (CAM.fpv && FX.SPD > 0.3) {
+    const shakeSpeed = (FX.SPD - 0.3) * 0.012;
+    cam.position.x += Math.sin(now * 0.032) * shakeSpeed;
+    cam.position.y += Math.cos(now * 0.041) * shakeSpeed;
   }
 
   updWindHud(wang);

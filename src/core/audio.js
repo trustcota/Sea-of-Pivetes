@@ -182,6 +182,49 @@ function criarCarretelLancando(ac, saida) {
   };
 }
 
+function criarVentoContinuo(ac, saida) {
+  const s = ac.createBufferSource();
+  s.buffer = noise(ac);
+  s.loop = true;
+
+  // Filtro passa-baixa para o ronco encorpado do vento
+  const fLow = ac.createBiquadFilter();
+  fLow.type = 'lowpass';
+  fLow.frequency.value = 260;
+  fLow.Q.value = 1.0;
+
+  // Filtro passa-banda para o ar cortando os estais e vergas
+  const fHigh = ac.createBiquadFilter();
+  fHigh.type = 'bandpass';
+  fHigh.frequency.value = 850;
+  fHigh.Q.value = 2.0;
+
+  const gainLow = ac.createGain();
+  gainLow.gain.value = 0.0001;
+  const gainHigh = ac.createGain();
+  gainHigh.gain.value = 0.0001;
+
+  s.connect(fLow).connect(gainLow).connect(saida);
+  s.connect(fHigh).connect(gainHigh).connect(saida);
+  s.start(0);
+
+  return {
+    atualizar(spd, gust = 1.0) {
+      if (!ac || ac.state !== 'running') return;
+      const t = ac.currentTime;
+      const normSpd = Math.min(1.5, Math.max(0, spd) / 10);
+      const gustBonus = Math.max(0, gust - 1);
+      const targetLow = Math.min(0.38, 0.03 + normSpd * 0.24 + gustBonus * 0.08);
+      const targetHigh = Math.min(0.26, Math.pow(normSpd, 1.3) * 0.20 + gustBonus * 0.06);
+
+      gainLow.gain.setTargetAtTime(targetLow, t, 0.15);
+      gainHigh.gain.setTargetAtTime(targetHigh, t, 0.15);
+      fLow.frequency.setTargetAtTime(200 + normSpd * 320, t, 0.2);
+      fHigh.frequency.setTargetAtTime(650 + normSpd * 850 + gustBonus * 400, t, 0.2);
+    }
+  };
+}
+
 // --- MANAGER CLASS ---
 
 class AudioManager {
@@ -190,6 +233,7 @@ class AudioManager {
     this.master = null;
     this.debug = false;
     this.carretel = null;
+    this.vento = null;
     this.enabled = false;
   }
 
@@ -202,6 +246,7 @@ class AudioManager {
     this.master.gain.value = 0.6;
     this.master.connect(this.ctx.destination);
     this.carretel = criarCarretelLancando(this.ctx, this.master);
+    this.vento = criarVentoContinuo(this.ctx, this.master);
     this.enabled = true;
 
     document.addEventListener('visibilitychange', () => {
@@ -276,6 +321,17 @@ class AudioManager {
   testar(nome) {
     if (!this.enabled) this.init();
     this.play(nome);
+  }
+
+  updateWind(speed, gust = 1.0) {
+    if (!this.enabled) return;
+    this.resume();
+    if (!this.vento && this.ctx) {
+      this.vento = criarVentoContinuo(this.ctx, this.master);
+    }
+    if (this.vento) {
+      this.vento.atualizar(speed, gust);
+    }
   }
 }
 
