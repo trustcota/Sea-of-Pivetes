@@ -34,7 +34,7 @@ function N(c, o, t, dur, type, f0, f1, q, pk, a, d) {
   const g = c.createGain();
   env(g, t, a, pk, d);
   s.connect(f).connect(g).connect(o);
-  s.start(t, R() * 1.5);
+  s.start(t);
   s.stop(t + Math.max(dur, a + d) + 0.1);
 }
 
@@ -82,6 +82,63 @@ function freada(c, o, t) {
 }
 
 function casco(c, o, t, k = 1) { N(c, o, t, .6, 'lowpass', 1100, 450, .7, .8 * k, .03, .55); }
+
+function trovao(c, o, t, params = {}) {
+  const dist = params.dist !== undefined ? params.dist : 60;
+  // Delay acústico ágil e realista: relâmpago brilha e a onda de som chega (0.06s a 0.65s)
+  const delay = Math.min(0.65, Math.max(0.06, dist * 0.005));
+  const startT = t + delay;
+  const k = params.k || 1;
+  const distAtten = Math.max(0.55, 1 - dist / 150);
+
+  // 1. Estalo / Chicote elétrico de alta voltagem (plasma arc snap)
+  // Sempre presente em todos os raios, audível com nitidez cristalina
+  const crackVol = Math.max(0.40, 1 - dist / 110) * 1.1 * k;
+  // Estalo supersônico de alta frequência
+  N(c, o, startT, 0.16, 'bandpass', 2400, 1500, 1.8, crackVol, 0.001, 0.12);
+  N(c, o, startT, 0.10, 'highpass', 3200, 1800, 1.2, crackVol * 0.85, 0.001, 0.08);
+  // Estalo secundário de ramificação da descarga (arc branching)
+  N(c, o, startT + 0.035, 0.14, 'bandpass', 1900, 1100, 2.0, crackVol * 0.7, 0.002, 0.10);
+
+  // 2. Onda de impacto / Detonação grave e audível em celulares, notebooks e fones
+  // Começa em 260 Hz (médio audível em qualquer alto-falante) descendo para 54 Hz com riqueza harmônica
+  const boom = c.createOscillator();
+  boom.type = 'sawtooth'; // Sawtooth fornece harmônicos ímpares e pares encorpados que cortam a chuva/vento
+  boom.frequency.setValueAtTime(260, startT);
+  boom.frequency.exponentialRampToValueAtTime(54, startT + 0.95);
+  const boomGain = c.createGain();
+  env(boomGain, startT, 0.015, 1.05 * k * distAtten, 1.35);
+  const boomFilter = c.createBiquadFilter();
+  boomFilter.type = 'lowpass';
+  boomFilter.frequency.setValueAtTime(580, startT);
+  boomFilter.frequency.exponentialRampToValueAtTime(140, startT + 1.4);
+  boom.connect(boomFilter).connect(boomGain).connect(o);
+  boom.start(startT);
+  boom.stop(startT + 1.6);
+
+  // Sub-grave complementar (para fones e caixas com woofer)
+  const sub = c.createOscillator();
+  sub.type = 'triangle';
+  sub.frequency.setValueAtTime(140, startT);
+  sub.frequency.exponentialRampToValueAtTime(38, startT + 1.2);
+  const subGain = c.createGain();
+  env(subGain, startT, 0.02, 0.9 * k * distAtten, 1.3);
+  sub.connect(subGain).connect(o);
+  sub.start(startT);
+  sub.stop(startT + 1.6);
+
+  // 3. Impacto de ruído detonante da massa de ar deslocada (K-BOOM detonation)
+  N(c, o, startT + 0.01, 0.85, 'lowpass', 650, 180, 2.0, 0.95 * k * distAtten, 0.02, 0.7);
+
+  // 4. Estrondo reverberante contínuo rolando no céu e no mar (3.0 a 4.2 segundos)
+  const rumbleDur = 3.0 + R() * 1.2;
+  // Corpo encorpado de reverberação de nuvens
+  N(c, o, startT + 0.06, rumbleDur, 'lowpass', 380, 110, 2.2, 0.9 * k * distAtten, 0.08, rumbleDur - 0.2);
+  // Ressonância média refletida nas ondas oceânicas
+  N(c, o, startT + 0.35, rumbleDur * 0.85, 'bandpass', 280, 130, 2.4, 0.6 * k * distAtten, 0.15, rumbleDur * 0.7);
+  // Onda secundária de eco distante rolando nas ilhas e no horizonte
+  N(c, o, startT + 0.75, rumbleDur * 0.65, 'bandpass', 210, 95, 1.8, 0.5 * k * distAtten, 0.20, rumbleDur * 0.5);
+}
 
 function praia(c, o, t) {
   N(c, o, t, 1.8, 'lowpass', 350, 3200, .6, .6, 1.7, .5);
@@ -152,6 +209,7 @@ function criarCarretelLancando(ac, saida) {
   function agendar() {
     if (!rodando || rate <= 0) return;
     const agora = ac.currentTime;
+    if (prox < agora) prox = agora;
     while (prox < agora + 0.1) {
       click(ac, saida, Math.max(prox, agora));
       prox += (1 / Math.max(rate, 0.1)) * (0.92 + Math.random() * 0.16);
@@ -182,6 +240,52 @@ function criarCarretelLancando(ac, saida) {
   };
 }
 
+function criarChuvaContinua(ac, saida) {
+  const s = ac.createBufferSource();
+  s.buffer = noise(ac);
+  s.loop = true;
+
+  // Filtro passa-banda para os respingos e gotas na água/madeira
+  const fBand = ac.createBiquadFilter();
+  fBand.type = 'bandpass';
+  fBand.frequency.value = 2400;
+  fBand.Q.value = 1.2;
+
+  // Filtro passa-baixa para o corpo grave da chuva contínua
+  const fLow = ac.createBiquadFilter();
+  fLow.type = 'lowpass';
+  fLow.frequency.value = 1100;
+  fLow.Q.value = 0.8;
+
+  const gainBand = ac.createGain();
+  gainBand.gain.value = 0.0001;
+  const gainLow = ac.createGain();
+  gainLow.gain.value = 0.0001;
+
+  s.connect(fBand).connect(gainBand).connect(saida);
+  s.connect(fLow).connect(gainLow).connect(saida);
+  s.start(0);
+
+  return {
+    atualizar(intensity) {
+      if (!ac || ac.state !== 'running') return;
+      const t = ac.currentTime;
+      const amt = Math.max(0, Math.min(1, intensity));
+      if (amt <= 0.01) {
+        gainBand.gain.setTargetAtTime(0.0001, t, 0.25);
+        gainLow.gain.setTargetAtTime(0.0001, t, 0.25);
+        return;
+      }
+      const targetBand = Math.min(0.28, 0.03 + amt * 0.22);
+      const targetLow = Math.min(0.22, 0.02 + Math.pow(amt, 1.4) * 0.18);
+      gainBand.gain.setTargetAtTime(targetBand, t, 0.15);
+      gainLow.gain.setTargetAtTime(targetLow, t, 0.15);
+      fBand.frequency.setTargetAtTime(1800 + amt * 1600, t, 0.2);
+      fLow.frequency.setTargetAtTime(800 + amt * 900, t, 0.2);
+    }
+  };
+}
+
 function criarVentoContinuo(ac, saida) {
   const s = ac.createBufferSource();
   s.buffer = noise(ac);
@@ -199,17 +303,26 @@ function criarVentoContinuo(ac, saida) {
   fHigh.frequency.value = 850;
   fHigh.Q.value = 2.0;
 
+  // Filtro passa-banda ressonante para o uivo gélido de nevasca
+  const fHowl = ac.createBiquadFilter();
+  fHowl.type = 'bandpass';
+  fHowl.frequency.value = 1250;
+  fHowl.Q.value = 4.2;
+
   const gainLow = ac.createGain();
   gainLow.gain.value = 0.0001;
   const gainHigh = ac.createGain();
   gainHigh.gain.value = 0.0001;
+  const gainHowl = ac.createGain();
+  gainHowl.gain.value = 0.0001;
 
   s.connect(fLow).connect(gainLow).connect(saida);
   s.connect(fHigh).connect(gainHigh).connect(saida);
+  s.connect(fHowl).connect(gainHowl).connect(saida);
   s.start(0);
 
   return {
-    atualizar(spd, gust = 1.0) {
+    atualizar(spd, gust = 1.0, blizzardFactor = 0.0) {
       if (!ac || ac.state !== 'running') return;
       const t = ac.currentTime;
       const normSpd = Math.min(1.5, Math.max(0, spd) / 10);
@@ -217,10 +330,16 @@ function criarVentoContinuo(ac, saida) {
       const targetLow = Math.min(0.38, 0.03 + normSpd * 0.24 + gustBonus * 0.08);
       const targetHigh = Math.min(0.26, Math.pow(normSpd, 1.3) * 0.20 + gustBonus * 0.06);
 
+      // Uivo agudo de nevasca cortando os mastros
+      const targetHowl = Math.min(0.24, blizzardFactor * (0.08 + gustBonus * 0.18 + normSpd * 0.06));
+
       gainLow.gain.setTargetAtTime(targetLow, t, 0.15);
       gainHigh.gain.setTargetAtTime(targetHigh, t, 0.15);
+      gainHowl.gain.setTargetAtTime(targetHowl, t, 0.12);
+
       fLow.frequency.setTargetAtTime(200 + normSpd * 320, t, 0.2);
       fHigh.frequency.setTargetAtTime(650 + normSpd * 850 + gustBonus * 400, t, 0.2);
+      fHowl.frequency.setTargetAtTime(1100 + Math.sin(t * 0.8) * 200 + gustBonus * 350, t, 0.2);
     }
   };
 }
@@ -234,6 +353,7 @@ class AudioManager {
     this.debug = false;
     this.carretel = null;
     this.vento = null;
+    this.chuva = null;
     this.enabled = false;
   }
 
@@ -247,6 +367,7 @@ class AudioManager {
     this.master.connect(this.ctx.destination);
     this.carretel = criarCarretelLancando(this.ctx, this.master);
     this.vento = criarVentoContinuo(this.ctx, this.master);
+    this.chuva = criarChuvaContinua(this.ctx, this.master);
     this.enabled = true;
 
     document.addEventListener('visibilitychange', () => {
@@ -257,8 +378,8 @@ class AudioManager {
   }
 
   resume() {
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+    if (this.ctx && this.ctx.state !== 'running') {
+      this.ctx.resume().catch(() => {});
     }
   }
 
@@ -289,6 +410,7 @@ class AudioManager {
       case 'peixe_agua': peixe_agua(this.ctx, g, t); break;
       case 'peixe_convez': peixe_convez(this.ctx, g, t); break;
       case 'gotas': gotas(this.ctx, g, t); break;
+      case 'trovao': trovao(this.ctx, g, t, params); break;
     }
   }
 
@@ -323,16 +445,30 @@ class AudioManager {
     this.play(nome);
   }
 
-  updateWind(speed, gust = 1.0) {
+  updateWind(speed, gust = 1.0, blizzardFactor = 0.0) {
     if (!this.enabled) return;
     this.resume();
     if (!this.vento && this.ctx) {
       this.vento = criarVentoContinuo(this.ctx, this.master);
     }
     if (this.vento) {
-      this.vento.atualizar(speed, gust);
+      this.vento.atualizar(speed, gust, blizzardFactor);
+    }
+  }
+
+  updateRain(intensity) {
+    if (!this.enabled) return;
+    this.resume();
+    if (!this.chuva && this.ctx) {
+      this.chuva = criarChuvaContinua(this.ctx, this.master);
+    }
+    if (this.chuva) {
+      this.chuva.atualizar(intensity);
     }
   }
 }
 
 export const Audio = new AudioManager();
+if (typeof window !== 'undefined') {
+  window.GaleaoAudio = Audio;
+}

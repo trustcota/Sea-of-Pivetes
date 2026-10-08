@@ -11,6 +11,10 @@ let activeMenu = 'main';
 let isOpen = false;
 let selectedIndex = -1;
 let selectedSubIndex = -1;
+let discardConfirmIdx = -1;
+let keySelectionStartTime = 0;
+let selectedCenterActive = false;
+let selectedCenterHalf = null;
 let toastTimeout = null;
 
 let rjoy = { id: -1, x0: 0, y0: 0, dx: 0, dy: 0 };
@@ -406,14 +410,14 @@ const MENUS = {
         {
           id: 'bestiary',
           get label() {
-            return 'Bestiário (Desativado)';
+            return 'Bestiário';
           },
           icon: '📖',
           get disabled() {
-            return true;
+            return false;
           },
           get desc() {
-            return 'Bestiário desativado por hora (retorne mais tarde)';
+            return 'Diário de bordo e observação de espécies marinhas';
           },
           action: () => {
             if (bestiaryModal) bestiaryModal.open();
@@ -567,16 +571,23 @@ const MENUS = {
       for (let i = 0; i < 8; i++) {
         const fish = GAME.backpack[i];
         if (fish) {
+          const isConfirming = discardConfirmIdx === i;
           items.push({
             id: `slot_${fish.id}`,
-            label: fish.name,
-            icon: fish.icon,
-            desc: `${(fish.weight < 1 ? (fish.weight * 1000).toFixed(0) + ' g' : fish.weight.toFixed(1) + ' kg')}`,
+            label: isConfirming ? 'Confirmar?' : fish.name,
+            icon: isConfirming ? '🗑️' : fish.icon,
+            desc: isConfirming 
+              ? `Clique novamente para descartar este ${fish.name}` 
+              : `${(fish.weight < 1 ? (fish.weight * 1000).toFixed(0) + ' g' : fish.weight.toFixed(1) + ' kg')}`,
             action: () => {
-              const discard = confirm(`Deseja descartar este ${fish.name}?`);
-              if (discard) {
+              if (isConfirming) {
                 GAME.backpack.splice(i, 1);
                 showOrderToast(`🗑️ ${fish.name} descartado.`);
+                discardConfirmIdx = -1;
+                renderRadialMenu();
+              } else {
+                discardConfirmIdx = i;
+                showOrderToast(`⚠️ Clique novamente para descartar ${fish.name}`);
                 renderRadialMenu();
               }
             }
@@ -587,11 +598,23 @@ const MENUS = {
             label: 'Vazio',
             icon: '🔲',
             desc: 'Espaço livre',
-            action: () => showOrderToast('🔲 Este slot está vazio.')
+            action: () => {
+              discardConfirmIdx = -1;
+              showOrderToast('🔲 Este slot está vazio.');
+            }
           });
         }
       }
-      items.push({ id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar ao inventário', target: 'inventory' });
+      items.push({ 
+        id: 'back', 
+        label: 'Voltar', 
+        icon: '↩', 
+        desc: 'Voltar ao inventário', 
+        target: 'inventory',
+        action: () => {
+          discardConfirmIdx = -1;
+        }
+      });
       return items;
     }
   }
@@ -606,6 +629,9 @@ export function openRadialMenu(menuKey = 'main') {
   activeMenu = menuKey;
   selectedIndex = -1;
   selectedSubIndex = -1;
+  discardConfirmIdx = -1;
+  selectedCenterActive = false;
+  selectedCenterHalf = null;
   rjoy.id = -1;
   hideRightJoycon();
   if (document.pointerLockElement) {
@@ -622,6 +648,9 @@ export function closeRadialMenu() {
   isOpen = false;
   selectedIndex = -1;
   selectedSubIndex = -1;
+  discardConfirmIdx = -1;
+  selectedCenterActive = false;
+  selectedCenterHalf = null;
   rjoy.id = -1;
   hideRightJoycon();
   const overlay = document.getElementById('radial-orders-overlay');
@@ -732,7 +761,7 @@ function renderRadialMenu() {
     labelText.setAttribute('font-size', '9');
     labelText.setAttribute('font-weight', 'bold');
     labelText.setAttribute('class', 'gta-slice-text-label');
-    labelText.setAttribute('fill', item.disabled ? 'rgba(255,255,255,0.4)' : (isActive && selectedSubIndex === -1 ? '#110b06' : '#fff9ed'));
+    labelText.setAttribute('fill', item.disabled ? '#8d7a64' : (isActive && selectedSubIndex === -1 ? '#ffffff' : '#1c120c'));
     labelText.textContent = item.label;
 
     g.appendChild(iconText);
@@ -796,7 +825,7 @@ function renderRadialMenu() {
           subLabelText.setAttribute('font-size', '8.5');
           subLabelText.setAttribute('font-weight', 'bold');
           subLabelText.setAttribute('class', 'gta-slice-text-label');
-          subLabelText.setAttribute('fill', isSubActive ? '#000000' : (isEquipped ? '#FFD400' : '#ffffff'));
+          subLabelText.setAttribute('fill', isSubActive ? '#ffffff' : (isEquipped ? '#a62a22' : '#1c120c'));
           subLabelText.textContent = (isEquipped ? '★ ' : '') + sub.label;
 
           const subCapText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -807,7 +836,7 @@ function renderRadialMenu() {
           subCapText.setAttribute('font-size', '7.5');
           subCapText.setAttribute('font-weight', 'bold');
           subCapText.setAttribute('class', 'gta-slice-text-label');
-          subCapText.setAttribute('fill', isSubActive ? '#000000' : (isEquipped ? '#ffeaa7' : '#00d9ff'));
+          subCapText.setAttribute('fill', isSubActive ? '#ffffff' : (isEquipped ? '#a62a22' : '#5c473c'));
           subCapText.textContent = sub.subLabel;
 
           subG.appendChild(subLabelText);
@@ -821,7 +850,7 @@ function renderRadialMenu() {
           subLabelText.setAttribute('font-size', '10');
           subLabelText.setAttribute('font-weight', 'bold');
           subLabelText.setAttribute('class', 'gta-slice-text-label');
-          subLabelText.setAttribute('fill', isSubActive ? '#000000' : '#00d9ff');
+          subLabelText.setAttribute('fill', isSubActive ? '#ffffff' : '#1c120c');
           subLabelText.textContent = sub.label;
           subG.appendChild(subLabelText);
         }
@@ -831,39 +860,70 @@ function renderRadialMenu() {
     }
   });
 
-  // Hub Central
-  const hubIcon = document.getElementById('radial-hub-icon');
-  const hubText = document.getElementById('radial-hub-text');
+  // Hub Central Split rendering and Description Banner update
   const hubDesc = document.getElementById('radial-hub-desc');
+  const bottomIcon = document.getElementById('radial-hub-icon');
+  const bottomLabel = document.getElementById('radial-hub-label');
 
   if (selectedIndex >= 0 && items[selectedIndex]) {
     const cur = items[selectedIndex];
     if (selectedSubIndex >= 0 && cur.subTabs && cur.subTabs[selectedSubIndex]) {
       const sub = cur.subTabs[selectedSubIndex];
-      if (hubIcon) hubIcon.textContent = sub.icon || cur.icon || '⛵';
       const curLabel = typeof cur.label === 'function' ? cur.label() : cur.label;
-      if (hubText) hubText.textContent = `${curLabel} · ${sub.label}`;
-      if (hubDesc) hubDesc.textContent = `${sub.fullLabel}${sub.isEquipped ? ' · [EQUIPADA]' : ' · Clique para equipar'}`;
+      if (hubDesc) hubDesc.textContent = `${curLabel} · ${sub.fullLabel}${sub.isEquipped ? ' · [EQUIPADA]' : ' · Clique para equipar'}`;
     } else {
-      if (hubIcon) hubIcon.textContent = cur.icon || '⚓';
       const curLabel = typeof cur.label === 'function' ? cur.label() : cur.label;
-      if (hubText) hubText.textContent = curLabel || 'ORDEM';
       const curDesc = typeof cur.desc === 'function' ? cur.desc() : cur.desc;
       if (hubDesc) {
         if (cur.disabled) {
-          hubDesc.textContent = curDesc || 'Desativado na Câmera Livre (entre em FPV para usar)';
+          hubDesc.textContent = `${curLabel}: ${curDesc || 'Desativado na Câmera Livre (entre em FPV para usar)'}`;
         } else if (cur.subRingMode === 'fullCircle') {
-          hubDesc.textContent = curDesc || 'Puxe para fora para selecionar uma das 10 varas';
+          hubDesc.textContent = `${curLabel}: ${curDesc || 'Puxe para fora para selecionar uma das 10 varas'}`;
         } else {
-          hubDesc.textContent = cur.subTabs ? `${curDesc} · (Puxe para fora para opções)` : (curDesc || '');
+          hubDesc.textContent = cur.subTabs ? `${curLabel}: ${curDesc} · (Puxe para fora para opções)` : `${curLabel}: ${curDesc || ''}`;
         }
       }
     }
   } else {
+    if (hubDesc) {
+      if (activeMenu === 'backpack_slots') {
+        hubDesc.textContent = 'Mochila: Selecione um peixe para descartar ou ver detalhes.';
+      } else if (activeMenu === 'inventory') {
+        hubDesc.textContent = 'Inventário: Acesse sua mochila, vara de pesca, lanterna ou luneta.';
+      } else if (activeMenu === 'submenus') {
+        hubDesc.textContent = 'Categorias: Escolha uma categoria para abrir ordens avançadas.';
+      } else {
+        hubDesc.textContent = 'Ordens do Capitão: Selecione uma ordem rápida para controlar o galeão.';
+      }
+    }
+  }
+
+  const hubSplit = document.getElementById('radial-hub-split');
+  const hubCenter = document.getElementById('radial-hub-center');
+
+  if (activeMenu === 'main') {
+    if (hubSplit) hubSplit.style.display = 'flex';
+    if (hubCenter) hubCenter.style.display = 'none';
+
+    const hubTop = document.getElementById('radial-hub-top');
+    const hubBottom = document.getElementById('radial-hub-bottom');
+    if (hubTop) {
+      hubTop.classList.toggle('active', selectedCenterHalf === 'top');
+    }
+    if (hubBottom) {
+      hubBottom.classList.toggle('active', selectedCenterHalf === 'bottom');
+    }
+  } else {
+    if (hubSplit) hubSplit.style.display = 'none';
+    if (hubCenter) hubCenter.style.display = 'flex';
+
     const parentMenu = menu.parent;
-    if (hubIcon) hubIcon.textContent = parentMenu ? '↩' : '✕';
-    if (hubText) hubText.textContent = parentMenu ? 'VOLTAR' : 'FECHAR';
-    if (hubDesc) hubDesc.textContent = '';
+    if (bottomIcon) bottomIcon.textContent = parentMenu ? '↩' : '✕';
+    if (bottomLabel) bottomLabel.textContent = parentMenu ? 'VOLTAR' : 'FECHAR';
+
+    if (hubCenter) {
+      hubCenter.classList.toggle('active', selectedCenterActive);
+    }
   }
 }
 
@@ -1000,23 +1060,58 @@ export function updateRadialSelectionByDirection(dx, dy) {
 
   const dist = Math.hypot(dx, dy);
   const isJoy = rjoy.id >= 0;
-  const deadZone = isJoy ? 0.20 : 38;
 
-  if (dist < deadZone && Math.abs(dx) < 8 && Math.abs(dy) < 8) {
-    if (selectedIndex !== -1 || selectedSubIndex !== -1) {
+  const wheel = document.getElementById('radial-wheel');
+  const wheelWidth = wheel ? wheel.getBoundingClientRect().width : 320;
+  const svgDist = isJoy ? (dist * 200) : (dist / (wheelWidth / 400));
+
+  // O círculo central de botões tem raio de ~58 SVG px.
+  const inCenter = isJoy ? (dist < 0.25) : (svgDist < 58);
+
+  // Zona morta real bem no centro exato para evitar oscilações
+  const isTrueDeadZone = isJoy ? (dist < 0.05) : (svgDist < 12);
+
+  if (isTrueDeadZone) {
+    if (selectedIndex !== -1 || selectedSubIndex !== -1 || selectedCenterActive !== false || selectedCenterHalf !== null) {
       selectedIndex = -1;
       selectedSubIndex = -1;
+      selectedCenterActive = false;
+      selectedCenterHalf = null;
       renderRadialMenu();
     }
     return;
   }
 
+  if (inCenter) {
+    if (activeMenu === 'main') {
+      const targetHalf = dy < 0 ? 'top' : 'bottom';
+      if (selectedCenterHalf !== targetHalf || selectedIndex !== -1 || selectedSubIndex !== -1 || selectedCenterActive !== false) {
+        selectedIndex = -1;
+        selectedSubIndex = -1;
+        selectedCenterActive = false;
+        selectedCenterHalf = targetHalf;
+        renderRadialMenu();
+      }
+    } else {
+      if (!selectedCenterActive || selectedIndex !== -1 || selectedSubIndex !== -1 || selectedCenterHalf !== null) {
+        selectedIndex = -1;
+        selectedSubIndex = -1;
+        selectedCenterActive = true;
+        selectedCenterHalf = null;
+        renderRadialMenu();
+      }
+    }
+    return;
+  }
+
+  // Cursor está na parte externa, limpamos seleção central
+  if (selectedCenterActive !== false || selectedCenterHalf !== null) {
+    selectedCenterActive = false;
+    selectedCenterHalf = null;
+  }
+
   const targetAngle = Math.atan2(dy, dx);
   const step = (2 * Math.PI) / total;
-
-  const wheel = document.getElementById('radial-wheel');
-  const wheelWidth = wheel ? wheel.getBoundingClientRect().width : 320;
-  const svgDist = isJoy ? (dist * 200) : (dist / (wheelWidth / 400));
   const isOuter = isJoy ? (dist > 0.60) : (svgDist > 138);
 
   const curItem = (selectedIndex >= 0 && items[selectedIndex]) ? items[selectedIndex] : null;
@@ -1089,6 +1184,40 @@ export function updateRadialSelectionByDirection(dx, dy) {
 
 export function executeSelectedRadialAction() {
   if (!isOpen) return false;
+
+  if (activeMenu === 'main') {
+    if (selectedCenterHalf === 'top') {
+      activeMenu = 'submenus';
+      selectedIndex = -1;
+      selectedSubIndex = -1;
+      selectedCenterHalf = null;
+      selectedCenterActive = false;
+      renderRadialMenu();
+      return true;
+    }
+    if (selectedCenterHalf === 'bottom') {
+      closeRadialMenu();
+      return true;
+    }
+  } else {
+    if (selectedCenterActive) {
+      const menu = MENUS[activeMenu] || MENUS.main;
+      if (menu.parent) {
+        activeMenu = menu.parent;
+        selectedIndex = -1;
+        selectedSubIndex = -1;
+        selectedCenterActive = false;
+        selectedCenterHalf = null;
+        discardConfirmIdx = -1;
+        renderRadialMenu();
+        return true;
+      } else {
+        closeRadialMenu();
+        return true;
+      }
+    }
+  }
+
   const menu = MENUS[activeMenu] || MENUS.main;
   const items = typeof menu.items === 'function' ? menu.items() : menu.items;
   if (selectedIndex >= 0) {
@@ -1139,12 +1268,44 @@ export function setupRadialMenu(helpers) {
     };
   }
 
-  const centerBtn = document.getElementById('radial-center-btn');
-  if (centerBtn) {
-    centerBtn.onclick = (e) => {
+  const hubTop = document.getElementById('radial-hub-top');
+  if (hubTop) {
+    hubTop.onclick = (e) => {
       e.stopPropagation();
-      if (activeMenu !== 'main') {
-        openRadialMenu('main');
+      if (activeMenu === 'main') {
+        activeMenu = 'submenus';
+        selectedIndex = -1;
+        selectedSubIndex = -1;
+        selectedCenterActive = false;
+        selectedCenterHalf = null;
+        renderRadialMenu();
+      }
+    };
+  }
+
+  const hubBottom = document.getElementById('radial-hub-bottom');
+  if (hubBottom) {
+    hubBottom.onclick = (e) => {
+      e.stopPropagation();
+      if (activeMenu === 'main') {
+        closeRadialMenu();
+      }
+    };
+  }
+
+  const hubCenter = document.getElementById('radial-hub-center');
+  if (hubCenter) {
+    hubCenter.onclick = (e) => {
+      e.stopPropagation();
+      const menu = MENUS[activeMenu] || MENUS.main;
+      if (menu.parent) {
+        activeMenu = menu.parent;
+        selectedIndex = -1;
+        selectedSubIndex = -1;
+        discardConfirmIdx = -1;
+        selectedCenterActive = false;
+        selectedCenterHalf = null;
+        renderRadialMenu();
       } else {
         closeRadialMenu();
       }
@@ -1156,7 +1317,7 @@ export function setupRadialMenu(helpers) {
     overlay.onpointerdown = (e) => {
       if (!isOpen) return;
 
-      if (e.target.closest('#radial-center-btn') || e.target.closest('.gta-slice-path') || e.target.closest('.gta-subslice-path')) {
+      if (e.target.closest('.gta-center-hub-split') || e.target.closest('.gta-center-hub-button') || e.target.closest('.gta-slice-path') || e.target.closest('.gta-subslice-path')) {
         return;
       }
 
@@ -1209,26 +1370,16 @@ export function setupRadialMenu(helpers) {
     };
   }
 
-  window.addEventListener('pointermove', (e) => {
-    if (!isOpen) return;
-    if (e.pointerType === 'mouse' && rjoy.id < 0) {
-      const wheel = document.getElementById('radial-wheel');
-      if (wheel) {
-        const rect = wheel.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        updateRadialSelectionByDirection(e.clientX - centerX, e.clientY - centerY);
-      }
-    }
-  });
-
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyQ' && e.target.tagName !== 'INPUT') {
       e.preventDefault();
       e.stopPropagation();
       if (!e.repeat && GAME.state === 'PLAY' && GAME.canControl) {
         if (!isOpen) {
+          keySelectionStartTime = Date.now();
           openRadialMenu('main');
+        } else {
+          closeRadialMenu();
         }
       }
       return;
@@ -1239,7 +1390,10 @@ export function setupRadialMenu(helpers) {
       e.stopPropagation();
       if (!e.repeat && GAME.state === 'PLAY' && GAME.canControl) {
         if (!isOpen) {
+          keySelectionStartTime = Date.now();
           openRadialMenu('inventory');
+        } else {
+          closeRadialMenu();
         }
       }
       return;
@@ -1280,8 +1434,15 @@ export function setupRadialMenu(helpers) {
       e.preventDefault();
       e.stopPropagation();
       if (isOpen) {
-        if (!executeSelectedRadialAction()) {
-          closeRadialMenu();
+        const elapsed = Date.now() - keySelectionStartTime;
+        if (elapsed > 250) {
+          // Se o usuário navegou para fora dos menus raiz ('main' ou 'inventory') por cliques,
+          // não fechamos nem executamos ação no keyup de Q/Tab, permitindo que continue no submenu.
+          if (activeMenu === 'main' || activeMenu === 'inventory') {
+            if (!executeSelectedRadialAction()) {
+              closeRadialMenu();
+            }
+          }
         }
       }
     }

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { rnd, clamp, c3 } from '../core/math.js';
 import { DEEP, SHAL, CREST, FOAM } from '../core/palettes.js';
 import { sc, sunL, cam } from '../core/renderer.js';
-import { SEAS, ST } from '../core/state.js';
+import { SEAS, ST, WEATHER } from '../core/state.js';
 import { ILHAS } from './archipelago.js';
 import { cloudState } from './clouds.js';
 
@@ -163,6 +163,18 @@ export function updSea(s, refX = ST.px, refZ = ST.pz) {
   c3(DEEP, s, cD);
   c3(SHAL, s, cS);
   c3(CREST, s, cCr);
+
+  if (WEATHER && WEATHER.snowFactor > 0.01) {
+    const snF = WEATHER.snowFactor;
+    cD.lerp(new T.Color(0x0e1b24), snF * 0.45);
+    cS.lerp(new T.Color(0x284758), snF * 0.40);
+    cCr.lerp(new T.Color(0xa5c4d6), snF * 0.45);
+  }
+  if (WEATHER && WEATHER.fogExtraDensity > 0.01) {
+    const fogWhiteness = Math.min(1.0, WEATHER.fogExtraDensity / 0.045);
+    cD.lerp(new T.Color(0x1a2b34), fogWhiteness * 0.35);
+    cS.lerp(new T.Color(0x324d5b), fogWhiteness * 0.35);
+  }
 
   let sunDirX = -0.5, sunDirY = 0.7, sunDirZ = -0.5;
   if (sunL && sunL.position) {

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { rnd, clamp, c3, m3 } from '../core/math.js';
 import { SKY, CLD, WH } from '../core/palettes.js';
 import { sc, cam, sky, sunL, hemi, fLight } from '../core/renderer.js';
-import { S, WI, ST, LT, FX, AN, REF } from '../core/state.js';
+import { S, WI, ST, LT, FX, AN, REF, WEATHER } from '../core/state.js';
 import { H, fastH } from '../world/ocean.js';
 import { clouds, cm, cloudState, updateCloudsSystem } from '../world/clouds.js';
 import { ILHAS } from '../world/archipelago.js';
@@ -11,6 +11,247 @@ import { Audio } from '../core/audio.js';
 
 const T = THREE;
 const wp = new T.Vector3();
+
+// Tipos de Clima da Fase 1
+export const WEATHER_TYPES = {
+  CLEAR: 'CLEAR',
+  FOG_LOW: 'FOG_LOW',
+  FOG_MED: 'FOG_MED',
+  FOG_SEVERE: 'FOG_SEVERE',
+  RAIN: 'RAIN',
+  STORM: 'STORM'
+};
+
+export const WEATHER_CONFIG = {
+  [WEATHER_TYPES.CLEAR]: {
+    label: 'Céu Limpo',
+    rainIntensity: 0.0,
+    stormIntensity: 0.0,
+    fogExtraDensity: 0.0,
+    targetWindStr: 0.35,
+    targetWaveScale: 0.05,
+    durationRange: [180, 360],
+    transitions: [
+      { type: WEATHER_TYPES.CLEAR, weight: 3 },
+      { type: WEATHER_TYPES.FOG_LOW, weight: 3 },
+      { type: WEATHER_TYPES.RAIN, weight: 2 }
+    ]
+  },
+  [WEATHER_TYPES.FOG_LOW]: {
+    label: 'Bruma Suave',
+    rainIntensity: 0.0,
+    stormIntensity: 0.0,
+    fogExtraDensity: 0.007,
+    targetWindStr: 0.25,
+    targetWaveScale: 0.06,
+    durationRange: [120, 240],
+    transitions: [
+      { type: WEATHER_TYPES.CLEAR, weight: 4 },
+      { type: WEATHER_TYPES.FOG_MED, weight: 3 },
+      { type: WEATHER_TYPES.RAIN, weight: 1 }
+    ]
+  },
+  [WEATHER_TYPES.FOG_MED]: {
+    label: 'Neblina Média',
+    rainIntensity: 0.0,
+    stormIntensity: 0.05,
+    fogExtraDensity: 0.020,
+    targetWindStr: 0.28,
+    targetWaveScale: 0.12,
+    durationRange: [90, 180],
+    transitions: [
+      { type: WEATHER_TYPES.FOG_LOW, weight: 3 },
+      { type: WEATHER_TYPES.FOG_SEVERE, weight: 2 },
+      { type: WEATHER_TYPES.RAIN, weight: 2 },
+      { type: WEATHER_TYPES.CLEAR, weight: 1 }
+    ]
+  },
+  [WEATHER_TYPES.FOG_SEVERE]: {
+    label: 'Neblina Severa',
+    rainIntensity: 0.05,
+    stormIntensity: 0.1,
+    fogExtraDensity: 0.055,
+    targetWindStr: 0.22,
+    targetWaveScale: 0.16,
+    durationRange: [75, 140],
+    transitions: [
+      { type: WEATHER_TYPES.FOG_MED, weight: 4 },
+      { type: WEATHER_TYPES.RAIN, weight: 2 }
+    ]
+  },
+  [WEATHER_TYPES.RAIN]: {
+    label: 'Chuva',
+    rainIntensity: 0.65,
+    stormIntensity: 0.50,
+    fogExtraDensity: 0.009,
+    targetWindStr: 0.60,
+    targetWaveScale: 0.50,
+    durationRange: [120, 240],
+    transitions: [
+      { type: WEATHER_TYPES.STORM, weight: 3 },
+      { type: WEATHER_TYPES.FOG_MED, weight: 2 },
+      { type: WEATHER_TYPES.CLEAR, weight: 3 }
+    ]
+  },
+  [WEATHER_TYPES.STORM]: {
+    label: 'Tempestade',
+    rainIntensity: 1.0,
+    stormIntensity: 0.95,
+    fogExtraDensity: 0.016,
+    targetWindStr: 0.88,
+    targetWaveScale: 0.95,
+    durationRange: [90, 160],
+    transitions: [
+      { type: WEATHER_TYPES.RAIN, weight: 4 },
+      { type: WEATHER_TYPES.FOG_MED, weight: 1 }
+    ]
+  }
+};
+
+export const weatherManager = {
+  current: WEATHER_TYPES.CLEAR,
+  target: WEATHER_TYPES.CLEAR,
+  dynamic: true,
+  timer: 240,
+  transDuration: 10.0,
+  transTimer: 0,
+  snowFactor: 0.0,
+  userWindOverride: false,
+  userWaveOverride: false,
+
+  values: {
+    rainIntensity: 0.0,
+    stormIntensity: 0.0,
+    fogExtraDensity: 0.0,
+    windStr: 0.35,
+    waveScale: 0.05
+  },
+
+  fromValues: {
+    rainIntensity: 0.0,
+    stormIntensity: 0.0,
+    fogExtraDensity: 0.0,
+    windStr: 0.35,
+    waveScale: 0.05
+  },
+
+  setWeather(type, duration = null, instant = false) {
+    if (!WEATHER_CONFIG[type]) return;
+    this.target = type;
+    const cfg = WEATHER_CONFIG[type];
+    if (duration !== null) {
+      this.timer = duration;
+    } else {
+      this.timer = rnd(cfg.durationRange[0], cfg.durationRange[1]);
+    }
+
+    if (instant) {
+      this.current = type;
+      this.transTimer = 0;
+      this.values.rainIntensity = cfg.rainIntensity;
+      this.values.stormIntensity = cfg.stormIntensity;
+      this.values.fogExtraDensity = cfg.fogExtraDensity;
+      if (!this.userWindOverride) this.values.windStr = cfg.targetWindStr;
+      if (!this.userWaveOverride) this.values.waveScale = cfg.targetWaveScale;
+      this.syncState();
+      return;
+    }
+
+    this.fromValues = { ...this.values };
+    this.transTimer = this.transDuration;
+    this.syncState();
+  },
+
+  setDynamic(enabled) {
+    this.dynamic = !!enabled;
+    this.syncState();
+  },
+
+  syncState() {
+    let effectiveLabel = WEATHER_CONFIG[this.target]?.label || 'Céu Limpo';
+    if (this.snowFactor > 0.15) {
+      if (this.target === WEATHER_TYPES.RAIN) {
+        effectiveLabel = this.snowFactor > 0.6 ? 'Neve' : 'Chuva & Neve';
+      } else if (this.target === WEATHER_TYPES.STORM) {
+        effectiveLabel = this.snowFactor > 0.6 ? 'Nevasca' : 'Tempestade de Neve';
+      } else if (this.target === WEATHER_TYPES.CLEAR) {
+        effectiveLabel = 'Céu Limpo (Ártico)';
+      } else if (this.target.startsWith('FOG')) {
+        effectiveLabel = 'Neblina Gélida';
+      }
+    }
+
+    WEATHER.type = this.target;
+    WEATHER.label = effectiveLabel;
+    WEATHER.dynamic = this.dynamic;
+    WEATHER.timer = Math.max(0, Math.round(this.timer));
+    WEATHER.snowFactor = this.snowFactor;
+    WEATHER.fogExtraDensity = this.values.fogExtraDensity;
+    WEATHER.isSnow = (this.target === WEATHER_TYPES.RAIN || this.target === WEATHER_TYPES.STORM) && this.snowFactor > 0.35;
+    WEATHER.isBlizzard = this.target === WEATHER_TYPES.STORM && this.snowFactor > 0.35;
+  },
+
+  chooseNextWeather() {
+    const curCfg = WEATHER_CONFIG[this.current] || WEATHER_CONFIG[WEATHER_TYPES.CLEAR];
+    const transitions = curCfg.transitions;
+    let totalWeight = 0;
+    for (const t of transitions) totalWeight += t.weight;
+    let roll = Math.random() * totalWeight;
+    for (const t of transitions) {
+      roll -= t.weight;
+      if (roll <= 0) {
+        return t.type;
+      }
+    }
+    return transitions[0].type;
+  },
+
+  update(dt, px = ST.px, pz = ST.pz) {
+    // 1. Atualiza influência térmica gélida da ilha de neve
+    if (ILHAS && ILHAS.getSnowIslandFactor) {
+      const targetSnow = ILHAS.getSnowIslandFactor(px, pz);
+      this.snowFactor += (targetSnow - this.snowFactor) * (1 - Math.exp(-dt * 2.2));
+    }
+
+    if (this.dynamic) {
+      this.timer -= dt;
+      if (this.timer <= 0) {
+        const next = this.chooseNextWeather();
+        this.setWeather(next);
+      }
+    }
+
+    const targetCfg = WEATHER_CONFIG[this.target] || WEATHER_CONFIG[WEATHER_TYPES.CLEAR];
+    if (this.transTimer > 0) {
+      this.transTimer = Math.max(0, this.transTimer - dt);
+      const t = 1.0 - (this.transTimer / this.transDuration);
+      const ease = t * t * (3.0 - 2.0 * t);
+
+      this.values.rainIntensity = this.fromValues.rainIntensity + (targetCfg.rainIntensity - this.fromValues.rainIntensity) * ease;
+      this.values.stormIntensity = this.fromValues.stormIntensity + (targetCfg.stormIntensity - this.fromValues.stormIntensity) * ease;
+      this.values.fogExtraDensity = this.fromValues.fogExtraDensity + (targetCfg.fogExtraDensity - this.fromValues.fogExtraDensity) * ease;
+      this.values.windStr = this.fromValues.windStr + (targetCfg.targetWindStr - this.fromValues.windStr) * ease;
+      this.values.waveScale = this.fromValues.waveScale + (targetCfg.targetWaveScale - this.fromValues.waveScale) * ease;
+
+      if (this.transTimer <= 0) {
+        this.current = this.target;
+      }
+    } else {
+      this.current = this.target;
+      this.values.rainIntensity = targetCfg.rainIntensity;
+      this.values.stormIntensity = targetCfg.stormIntensity;
+      this.values.fogExtraDensity = targetCfg.fogExtraDensity;
+      if (!this.userWindOverride) {
+        this.values.windStr = targetCfg.targetWindStr;
+      }
+      if (!this.userWaveOverride) {
+        this.values.waveScale = targetCfg.targetWaveScale;
+      }
+    }
+
+    this.syncState();
+  }
+};
 
 // Luz secundária do navio
 export const key = new T.DirectionalLight(0xfff0d0, .4);
@@ -28,6 +269,29 @@ rg.setAttribute('position', new T.BufferAttribute(rp, 3));
 export const rain = new T.LineSegments(rg, new T.LineBasicMaterial({ color: 0xbfd4e2, transparent: true, opacity: .4, fog: false }));
 rain.frustumCulled = false;
 sc.add(rain);
+
+// Neve e Nevasca (flocos 3D com flutuação orgânica e arrasto pelo vento aparente)
+const SN = 2400, snP = new Float32Array(SN * 3), snPhase = new Float32Array(SN), snSpd = new Float32Array(SN), snG = new T.BufferGeometry();
+for (let i = 0; i < SN; i++) {
+  snP[i * 3] = rnd(-55, 55);
+  snP[i * 3 + 1] = rnd(0, 48);
+  snP[i * 3 + 2] = rnd(-55, 55);
+  snPhase[i] = rnd(0, 6.28);
+  snSpd[i] = rnd(3.2, 5.8);
+}
+snG.setAttribute('position', new T.BufferAttribute(snP, 3));
+export const snowMat = new T.PointsMaterial({
+  color: 0xf4f9ff,
+  size: 2.2,
+  transparent: true,
+  opacity: 0.85,
+  depthWrite: false,
+  fog: false
+});
+export const snow = new T.Points(snG, snowMat);
+snow.frustumCulled = false;
+snow.visible = false;
+sc.add(snow);
 
 // Riscos de vento: partículas de ar levadas pelo vento aparente (estilo Sea of Thieves)
 const NSK = 180, skA = new Float32Array(NSK * 3), skP = new Float32Array(NSK * 6), skG = new T.BufferGeometry();
@@ -48,15 +312,23 @@ bolt.frustumCulled = false;
 sc.add(bolt);
 
 export function strike() {
-  const a = rnd(0, 6.28), r = rnd(30, 100), x = Math.cos(a) * r, z = Math.sin(a) * r, p = [];
+  const shipRelX = ST.px - (REF ? REF.x : ST.px);
+  const shipRelZ = ST.pz - (REF ? REF.z : ST.pz);
+  bolt.position.set(shipRelX, 0, shipRelZ);
+
+  const a = rnd(0, 6.28), r = rnd(25, 85), x = Math.cos(a) * r, z = Math.sin(a) * r, p = [];
   for (let i = 0; i <= 10; i++) {
     const j = i > 0 && i < 10 ? 4 : 0;
     p.push(new T.Vector3(x + rnd(-j, j), 62 - i * 6.2, z + rnd(-j, j)));
   }
   bolt.geometry.dispose();
-  bolt.geometry = new T.TubeGeometry(new T.CatmullRomCurve3(p), 30, .35, 4);
+  bolt.geometry = new T.TubeGeometry(new T.CatmullRomCurve3(p), 30, .45, 4);
   bolt.visible = true;
   LT.flash = 1;
+  Audio.play('trovao', { vol: clamp(1.35 - r / 130, 0.85, 1.3), dist: r });
+}
+if (typeof window !== 'undefined') {
+  window.strikeLightning = strike;
 }
 
 // Esteira de espuma e boias de referência
@@ -641,15 +913,24 @@ export function updSun(dt, refX = (REF ? REF.x : ST.px), refZ = (REF ? REF.z : S
 
 export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   const celestial = getCelestialFrame(S.time);
+  const wVals = weatherManager.values;
+  const effectiveStorm = Math.max(s, wVals.stormIntensity);
 
   // Raios e tempestade
   LT.flash = Math.max(0, LT.flash - dt * 2.6);
   const ff = LT.flash * (.65 + .35 * Math.sin(now * .07));
-  if (s > .72) {
+  if (effectiveStorm > .72) {
     LT.nl -= dt;
     if (LT.nl < 0) {
       strike();
-      LT.nl = Math.random() < .3 ? rnd(.15, .4) : rnd(2, 7);
+      LT.nl = Math.random() < .3 ? rnd(.15, .4) : rnd(2, 6);
+    }
+  } else if (effectiveStorm > .42 && wVals.rainIntensity > 0.45) {
+    // Trovões ocasionais e distantes durante chuva intensa
+    LT.nl -= dt;
+    if (LT.nl < 0) {
+      strike();
+      LT.nl = rnd(12, 24);
     }
   }
   if (LT.flash < .02) bolt.visible = false;
@@ -658,8 +939,29 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   const skyColor = celestial.sky.clone();
   const fogColor = celestial.fog.clone();
 
-  skyColor.lerp(cTemp1.setHex(0x16222a), s);
-  fogColor.lerp(cTemp1.setHex(0x121d24), s);
+  skyColor.lerp(cTemp1.setHex(0x16222a), effectiveStorm);
+  fogColor.lerp(cTemp1.setHex(0x121d24), effectiveStorm);
+
+  // Efeito leitoso e opaco de neblina (quando neblina suave, média ou severa estiver ativa)
+  if (wVals.fogExtraDensity > 0.002) {
+    const fogWhiteness = Math.min(1.0, wVals.fogExtraDensity / 0.045);
+    fogColor.lerp(cTemp1.setHex(0xd2e1ec), fogWhiteness * 0.78);
+    skyColor.lerp(cTemp1.setHex(0x9cb6c8), fogWhiteness * 0.65);
+  }
+
+  // Atmosfera ártica / gelo próximo a ilhas de neve
+  const sFactor = weatherManager.snowFactor;
+  let blizzardDensBonus = 0;
+  if (sFactor > 0.01) {
+    fogColor.lerp(cTemp1.setHex(0xb8cddc), sFactor * 0.52);
+    skyColor.lerp(cTemp1.setHex(0x98b5c9), sFactor * 0.45);
+    // Nevasca: névoa branca cortante intensa (whiteout)
+    if (effectiveStorm > 0.55 && sFactor > 0.25) {
+      const blizzardStrength = Math.min(1.0, effectiveStorm * sFactor * 1.35);
+      fogColor.lerp(cTemp1.setHex(0xeaf2f8), blizzardStrength * 0.85);
+      blizzardDensBonus = 0.038 * blizzardStrength;
+    }
+  }
 
   skyColor.lerp(WH, ff * .4);
   fogColor.lerp(WH, ff * .5);
@@ -667,30 +969,46 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   sky.copy(skyColor);
   sc.fog.color.copy(fogColor);
 
-  const baseDens = celestial.fogDens + (0.027 - celestial.fogDens) * s;
+  const baseDens = celestial.fogDens + (0.027 - celestial.fogDens) * effectiveStorm + wVals.fogExtraDensity + blizzardDensBonus;
   const vdFactor = Math.max(1, (ILHAS && ILHAS.vd ? ILHAS.vd() : 2) / 2);
   sc.fog.density = baseDens / vdFactor;
 
   const occ = cloudState.sunOcclusion;
-  const stormLightMultiplier = 1.0 - s * 0.85;
+  const fogDiffusion = Math.min(0.9, wVals.fogExtraDensity * 15);
+  const snowDiffusion = Math.min(0.85, sFactor * 0.9);
+  const stormLightMultiplier = Math.max(0.08, (1.0 - effectiveStorm * 0.85) * (1.0 - fogDiffusion * 0.8) * (1.0 - snowDiffusion * 0.7));
 
   sunL.color.copy(celestial.light);
-  sunL.intensity = celestial.lightInt * (1 - 0.6 * occ) * stormLightMultiplier;
+  sunL.intensity = celestial.lightInt * (1 - 0.65 * occ) * stormLightMultiplier;
   key.color.copy(celestial.light);
   key.intensity = sunL.intensity * .4;
 
-  hemi.color.copy(celestial.hemiS).lerp(cTemp1.setHex(0x323e46), s);
-  hemi.groundColor.copy(celestial.hemiG).lerp(cTemp1.setHex(0x1a2126), s);
-  hemi.intensity = (celestial.hemiInt * (1.0 - s * 0.45) + ff * 1.6) * (1 - 0.18 * occ);
+  hemi.color.copy(celestial.hemiS).lerp(cTemp1.setHex(0x323e46), effectiveStorm);
+  if (wVals.fogExtraDensity > 0.005) {
+    hemi.color.lerp(cTemp1.setHex(0xb5c8d4), Math.min(1.0, wVals.fogExtraDensity * 22));
+  }
+  hemi.groundColor.copy(celestial.hemiG).lerp(cTemp1.setHex(0x1a2126), effectiveStorm);
+  hemi.intensity = (celestial.hemiInt * (1.0 - effectiveStorm * 0.45) + ff * 1.6) * (1 - 0.18 * occ) + (wVals.fogExtraDensity > 0.01 ? 0.08 : 0);
   
   fLight.intensity = ff * 2.2;
 
-  // Lanternas quentes do navio acendem no crepúsculo/tempestade/noite se estiverem ativadas
+  // Lanternas de latão do galeão acendem automaticamente em tempestades, neblina severa, nevasca ou noite
+  const isSevereFog = wVals.fogExtraDensity > 0.035;
+  const isDarkStorm = effectiveStorm > 0.65;
+  const isBlizzardActive = effectiveStorm > 0.50 && sFactor > 0.25;
+  const isNightOrTwilight = celestial.isMoon || S.time < 6.0 || S.time > 18.0;
+  const shouldAutoLightLanterns = isSevereFog || isDarkStorm || isBlizzardActive || isNightOrTwilight;
+
   if (SH.lanterns) {
-    const nightLanternFactor = celestial.isMoon ? 0.85 : 0.0;
-    const lInt = Math.max(.2, (s - .2) * 1.8) + ff * 1.2 + nightLanternFactor;
+    const nightLanternFactor = celestial.isMoon ? 0.85 : (S.time < 6.0 || S.time > 18.0 ? 0.5 : 0.0);
+    const fogLanternFactor = wVals.fogExtraDensity > 0.015 ? Math.min(1.0, wVals.fogExtraDensity * 24) : 0.0;
+    const stormLanternFactor = effectiveStorm > 0.4 ? Math.min(1.0, (effectiveStorm - 0.4) * 1.6) : 0.0;
+    const blizzardLanternFactor = isBlizzardActive ? 0.85 : 0.0;
+    const lInt = Math.max(0.35, Math.max(nightLanternFactor, fogLanternFactor, stormLanternFactor, blizzardLanternFactor) * 1.6) + ff * 1.2;
+
     SH.lanterns.forEach(lant => {
-      if (lant.on) {
+      const active = lant.on || shouldAutoLightLanterns;
+      if (active) {
         lant.light.intensity = lInt * (1 + .08 * Math.sin(now * .008));
         lant.mat.emissiveIntensity = 0.95 * (1 + .05 * Math.sin(now * .008));
       } else {
@@ -701,8 +1019,8 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   }
 
   // Vibração suave de câmera durante tempestade ou relâmpagos
-  if (s > .65 || LT.flash > .05) {
-    const shake = (s > .65 ? (s - .65) * .08 : 0) + LT.flash * .12;
+  if (effectiveStorm > .65 || LT.flash > .05) {
+    const shake = (effectiveStorm > .65 ? (effectiveStorm - .65) * .08 : 0) + LT.flash * .12;
     cam.position.x += (Math.random() - .5) * shake;
     cam.position.y += (Math.random() - .5) * shake;
   }
@@ -710,18 +1028,31 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   // Efeito de gotas de chuva na lente da visão/câmera
   const lensEl = document.getElementById('lens-drops');
   if (lensEl) {
-    lensEl.style.opacity = Math.max(0, (s - .35) * 1.5).toFixed(2);
+    const lensDrops = Math.max((effectiveStorm - .35) * 1.5, wVals.rainIntensity * 1.3);
+    lensEl.style.opacity = Math.max(0, Math.min(1, lensDrops)).toFixed(2);
   }
 
-  // Sistema Dinâmico de Nuvens
+  // Sistema Dinâmico de Nuvens integrado à atmosfera, frio e neblina
   const wang = Math.atan2(vwx, vwz);
-  updateCloudsSystem(dt, now, vwx, vwz, wang, WI.wsp, s);
+  const cloudStorm = Math.max(effectiveStorm, wVals.rainIntensity * 0.65);
+  const fogLevel = Math.min(1.0, wVals.fogExtraDensity / 0.045);
+  updateCloudsSystem(dt, now, vwx, vwz, wang, WI.wsp, cloudStorm, sFactor, fogLevel);
 
-  // Chuva
-  const k = clamp((s - .4) / .5, 0, 1), cnt = Math.floor(RN * k);
-  rg.setDrawRange(0, cnt * 2);
-  rain.material.opacity = .12 + .38 * k;
-  for (let i = 0; i < cnt; i++) {
+  // 1. Precipitação: Chuva vs Neve vs Nevasca
+  const precipAmt = Math.max(clamp((s - .4) / .5, 0, 1), wVals.rainIntensity);
+  const snowF = weatherManager.snowFactor;
+  const isBlizzard = effectiveStorm > 0.55 && snowF > 0.25;
+
+  // Fator proporcional de transição contínua
+  const rainPartFactor = precipAmt * Math.max(0, 1.0 - snowF * 1.35);
+  const snowPartFactor = precipAmt * clamp(snowF * 1.25, 0, 1);
+
+  // Chuva (gotas velozes esticadas verticalmente)
+  const rainCnt = Math.floor(RN * rainPartFactor);
+  rg.setDrawRange(0, rainCnt * 2);
+  rain.visible = rainCnt > 0;
+  rain.material.opacity = .12 + .38 * rainPartFactor;
+  for (let i = 0; i < rainCnt; i++) {
     const o = i * 6;
     let y = rp[o + 1] - 48 * dt;
     if (y < 0) {
@@ -736,11 +1067,51 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
     rp[o + 4] = y + 1.9;
     rp[o + 5] = rp[o + 2] - avz * .07;
   }
-  rg.attributes.position.needsUpdate = true;
+  if (rainCnt > 0) {
+    rg.attributes.position.needsUpdate = true;
+  }
+
+  // Neve e Nevasca (flocos 3D com flutuação senoidal e arrasto pelo vento aparente)
+  const snowCnt = Math.floor(SN * (isBlizzard ? Math.min(1.0, snowPartFactor * 1.4) : snowPartFactor));
+  snG.setDrawRange(0, snowCnt);
+  snow.visible = snowCnt > 0;
+  if (snowCnt > 0) {
+    snowMat.size = isBlizzard ? 3.2 : 2.2;
+    snowMat.opacity = isBlizzard ? 0.95 : (0.45 + 0.45 * snowPartFactor);
+    const fallMult = isBlizzard ? 2.6 : 1.0;
+    const windPush = isBlizzard ? 1.45 : 0.48;
+
+    for (let i = 0; i < snowCnt; i++) {
+      const o = i * 3;
+      let y = snP[o + 1] - (snSpd[i] * fallMult) * dt;
+      let x = snP[o];
+      let z = snP[o + 2];
+
+      // Flutuação senoidal graciosa (mais ampla em neve mansa, cortante e veloz em nevasca)
+      const sway = Math.sin(now * 0.0025 + snPhase[i]) * (isBlizzard ? 0.35 : 1.4) * dt;
+      x += avx * windPush * dt + sway;
+      z += avz * windPush * dt + Math.cos(now * 0.002 + snPhase[i]) * (isBlizzard ? 0.35 : 1.1) * dt;
+
+      // Wrapping em caixa volumétrica centrada no jogador
+      if (y < 0) {
+        y += 48;
+        x = rnd(-55, 55);
+        z = rnd(-55, 55);
+      }
+      if (x > 55) x -= 110; else if (x < -55) x += 110;
+      if (z > 55) z -= 110; else if (z < -55) z += 110;
+
+      snP[o] = x;
+      snP[o + 1] = y;
+      snP[o + 2] = z;
+    }
+    snG.attributes.position.needsUpdate = true;
+  }
 
   // Câmera e partículas ao redor
   cam.getWorldPosition(wp);
   rain.position.set(wp.x, 0, wp.z);
+  snow.position.set(wp.x, 0, wp.z);
 
   // Riscos de vento (estilo Sea of Thieves: brisas mais longas, nítidas e direcionadas fluindo pelo convés)
   const am = Math.hypot(avx, avz) + .001, tl = Math.min(9.0, 2.5 + am * .45);
@@ -766,6 +1137,8 @@ export function updAtmosphere(s, dt, now, vwx, vwz, avx, avz) {
   skM.position.set(wp.x, 0, wp.z);
   skM.material.opacity = (0.15 + 0.25 * clamp(WI.wsp / 12, 0, 1)) * (0.6 + 0.4 * windWave);
 
-  // Áudio procedural de vento contínuo proporcional à velocidade e rajadas
-  Audio.updateWind(am + Math.abs(ST.v) * 0.6, WI.wsp / 10);
+  // Áudio procedural de vento contínuo (com uivo cortante na nevasca) e chuva contínua
+  const blizzardAudioFactor = (effectiveStorm > 0.50 && sFactor > 0.25) ? Math.min(1.0, effectiveStorm * sFactor * 1.4) : 0;
+  Audio.updateWind(am + Math.abs(ST.v) * 0.6, WI.wsp / 10, blizzardAudioFactor);
+  Audio.updateRain(rainPartFactor);
 }

@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { clamp, wrapA } from './core/math.js';
 import { R, sc, cam, cv } from './core/renderer.js';
-import { S, WI, ST, SEAS, CAM, UIS, FX, FL, AN, INT, fp, keys, joy, lk, GAME, PL, REF } from './core/state.js';
+import { S, WI, ST, SEAS, CAM, UIS, FX, FL, AN, INT, fp, keys, joy, lk, GAME, PL, REF, WEATHER } from './core/state.js';
 import { setWaveDir, H, updSea } from './world/ocean.js';
 import { ILHAS } from './world/archipelago.js';
-import { updExtras, updSpeedFx, vn, updSun, updAtmosphere, updSplashes, updRipples, updLineWakes } from './world/weather.js';
+import { updExtras, updSpeedFx, vn, updSun, updAtmosphere, updSplashes, updRipples, updLineWakes, weatherManager, WEATHER_TYPES } from './world/weather.js';
 import { ship, fl } from './ship/ship.js';
 import { updShipPhysics } from './ship/physics.js';
 import { setFpv, resetPlayer, updFPV, updGlow, updGlowHelm, qD, updInter, hud } from './ship/player.js';
@@ -273,7 +273,7 @@ const ui = setupUI({
   onPlay: startPlayTransition,
   onReturnMenu: returnToMenu
 });
-const { rows, SL, rrows, hlm, btn, stx, mapTick } = ui;
+const { rows, SL, rrows, hlm, btn, stx, mapTick, syncLiveSettingsModal } = ui;
 
 let last = 0;
 function loop(now) {
@@ -284,26 +284,56 @@ function loop(now) {
   // Avança o tempo do jogo (24h em 10 minutos reais = 0.04 horas por segundo)
   S.time = (S.time + dt * 0.04) % 24;
 
+  // Atualização do motor de clima dinâmico
+  weatherManager.update(dt, ST.px, ST.pz);
+  if (weatherManager.dynamic || weatherManager.transTimer > 0) {
+    S.t += (weatherManager.values.waveScale - S.t) * (1 - Math.exp(-dt * 0.8));
+    WI.str += (weatherManager.values.windStr - WI.str) * (1 - Math.exp(-dt * 0.6));
+  }
+  if (syncLiveSettingsModal) syncLiveSettingsModal();
+
   S.c += (S.t - S.c) * (1 - Math.exp(-dt * 1.1));
   if (Math.abs(S.c - S.t) < 0.0001) S.c = S.t;
   const s = S.c;
 
-  // Vento: direção/força suavizadas + rajadas
+  // Vento: direção/força suavizadas + rajadas climáticas
   WI.a += wrapA(WI.dir - WI.a) * (1 - Math.exp(-dt * .7));
   WI.s += (WI.str - WI.s) * (1 - Math.exp(-dt * .8));
+
+  const wVals = weatherManager.values;
+  const sFactor = weatherManager.snowFactor;
+  const isBlizzard = wVals.stormIntensity > 0.55 && sFactor > 0.25;
+  const isSevereFog = wVals.fogExtraDensity > 0.035;
+
+  // Modulação climática das rajadas de vento
+  // Neblina: ar quieto, poucas oscilações (0.45x)
+  // Tempestade / Nevasca: rajadas turbulentas cortantes (1.35x a 1.65x)
+  const gustVarianceMult = isSevereFog ? 0.45 : (isBlizzard ? 1.65 : (wVals.stormIntensity > 0.6 ? 1.35 : 1.0));
   const bw = 3 + 16 * WI.s;
-  const gustAt = (x, z) => clamp(1 + (.12 + .5 * WI.s) * 1.4 * (2 * vn((x - bw * Math.sin(WI.a) * now * .0006) * .035, (z - bw * Math.cos(WI.a) * now * .0006) * .035) - 1), .6, 1.7);
-  const gu = gustAt(ST.px, ST.pz);
-  const wang = WI.a + (.08 + .18 * WI.s) * Math.sin(now * .00011) + .1 * WI.s * Math.sin(now * .00037 + 2) + .12 * (gu - 1);
-  WI.wsp = (3 + 16 * WI.s) * gu;
+  const rawGust = (2 * vn((ST.px - bw * Math.sin(WI.a) * now * .0006) * .035, (ST.pz - bw * Math.cos(WI.a) * now * .0006) * .035) - 1);
+  const gu = clamp(1 + (.12 + .5 * WI.s) * 1.4 * rawGust * gustVarianceMult, isSevereFog ? .85 : .55, isBlizzard ? 1.9 : 1.75);
+
+  const windTurbulence = (.08 + .18 * WI.s) * (isBlizzard ? 1.4 : 1.0);
+  const wang = WI.a + windTurbulence * Math.sin(now * .00011) + .1 * WI.s * Math.sin(now * .00037 + 2) + .12 * (gu - 1);
+  
+  // Velocidade do vento ajustada pelo clima (com bônus de vendaval na nevasca)
+  const blizzardBonus = isBlizzard ? 3.5 : 0;
+  WI.wsp = (3 + 16 * WI.s + blizzardBonus) * gu;
   const vwx = WI.wsp * Math.sin(wang), vwz = WI.wsp * Math.cos(wang);
 
+  // Mar e Ondas integrados ao clima
   const sw = clamp(.55 * s + .6 * WI.s, 0, 1);
   const waveScale = s === 0 ? 0 : Math.min(1.0, s / 0.04);
-  SEAS.amp = waveScale * (.1 + 1.5 * Math.pow(sw, 1.6));
-  SEAS.st = waveScale * (.2 + .18 * sw);
-  SEAS.chop = waveScale * (.04 + .45 * sw);
-  SEAS.wt += dt * (.5 + .6 * sw);
+  
+  // Em neblina: mar aveludado com chop reduzido
+  // Em tempestade/nevasca: grandes ondas Gerstner íngremes com cristas altas
+  const chopClimateMult = isSevereFog ? 0.35 : (isBlizzard ? 1.3 : 1.0);
+  const ampClimateMult = isBlizzard ? 1.15 : 1.0;
+  
+  SEAS.amp = waveScale * (.1 + 1.55 * Math.pow(sw, 1.55)) * ampClimateMult;
+  SEAS.st = waveScale * (.2 + .18 * sw) * (isBlizzard ? 1.2 : 1.0);
+  SEAS.chop = waveScale * (.04 + .45 * sw) * chopClimateMult;
+  SEAS.wt += dt * (.5 + .65 * sw * (isBlizzard ? 1.25 : 1.0));
   setWaveDir(wang);
 
   // Física do navio e dinâmica do casco
@@ -331,10 +361,13 @@ function loop(now) {
   updLineWakes(dt);
   updAtmosphere(s, dt, now, vwx, vwz, avx, avz);
 
-  // Balanço dinâmico do casco
+  // Balanço dinâmico do casco: reforçado realisticamente em tempestades e nevascas
+  const stormPitchBoost = 1.0 + (isBlizzard ? 0.35 : (wVals.stormIntensity > 0.6 ? 0.25 : 0.0));
+  const stormRollBoost = 1.0 + (isBlizzard ? 0.30 : (wVals.stormIntensity > 0.6 ? 0.20 : 0.0));
+
   [vy, vyv] = so2(vy, vyv, (hb + hs + hp + ht + hw0) / 5 + .4, 1.6, .6, dt);
-  [pt, ptv] = so2(pt, ptv, -Math.atan((hb - hs) / 10) * .45, 1.4, .5, dt);
-  [rl, rlv] = so2(rl, rlv, Math.atan((ht - hp) / 4.4) * .28, 1.26, .4, dt);
+  [pt, ptv] = so2(pt, ptv, -Math.atan((hb - hs) / 10) * .45 * stormPitchBoost, 1.4, .5, dt);
+  [rl, rlv] = so2(rl, rlv, Math.atan((ht - hp) / 4.4) * .28 * stormRollBoost, 1.26, .4, dt);
   ship.position.set(ST.px - refX, vy, ST.pz - refZ);
   ship.rotation.set(pt, ST.hd, rl + ST.heel);
   ST.vy = vy;
@@ -438,9 +471,10 @@ function loop(now) {
   updWindHud(wang);
 
   const mi = s < .25 ? 0 : s < .72 ? 1 : 2;
-  if (mi !== UIS.mode) {
+  if (stx && (mi !== UIS.mode || stx.dataset.weather !== WEATHER.type)) {
     UIS.mode = mi;
-    if (stx) stx.textContent = ['Mar calmo', 'Ondas', 'Tempestade'][mi];
+    stx.dataset.weather = WEATHER.type;
+    stx.textContent = `${WEATHER.label} · ${['Mar calmo', 'Ondas', 'Tempestade'][mi]}`;
     btn.forEach((b, i) => b.classList.toggle('on', i === mi));
   }
 

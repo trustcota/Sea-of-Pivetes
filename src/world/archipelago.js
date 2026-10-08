@@ -219,6 +219,46 @@ function pump() { const t0 = performance.now(), lim = bud > 0 ? 24 : 7; bud--; w
 function tH(x, z) { const S = CS / N, i = Math.floor(x / S), j = Math.floor(z / S), u = x / S - i, v = z / S - j, a = field(i * S, j * S).h, b = field((i + 1) * S, j * S).h, c = field(i * S, (j + 1) * S).h, d = field((i + 1) * S, (j + 1) * S).h; return u + v <= 1 ? a + u * (b - a) + v * (c - a) : d + (1 - u) * (c - d) + (1 - v) * (b - d) }
 function nearestIsland(x, z) { const ix = Math.floor(x / IC), iz = Math.floor(z / IC); let b = null, bd = 1e9; for (let i = ix - 2; i <= ix + 2; i++) for (let j = iz - 2; j <= iz + 2; j++) { const c = cell(i, j); if (c) { const d = Math.hypot(c.x - x, c.z - z); if (d < bd) { bd = d; b = c } } } return b }
 
+/* Busca a ilha mais próxima do bioma Tundra nevada (b === 5) */
+function nearestSnowIsland(x, z) {
+  const ix = Math.floor(x / IC), iz = Math.floor(z / IC);
+  let best = null, bestDist = 1e9;
+  for (let i = ix - 4; i <= ix + 4; i++) {
+    for (let j = iz - 4; j <= iz + 4; j++) {
+      const c = cell(i, j);
+      if (c && c.b === 5) {
+        const d = Math.hypot(c.x - x, c.z - z);
+        if (d < bestDist) {
+          bestDist = d;
+          best = c;
+        }
+      }
+    }
+  }
+  return best ? { island: best, dist: bestDist } : null;
+}
+
+/* Fator contínuo de influência térmica gélida da Tundra (0.0 no mar quente a 1.0 no coração da ilha de neve) */
+function getSnowIslandFactor(x, z) {
+  const nearest = nearestSnowIsland(x, z);
+  if (!nearest) return 0.0;
+  const { island, dist } = nearest;
+  const transitionMargin = 140;
+  const outerRadius = island.r + transitionMargin;
+  if (dist >= outerRadius) return 0.0;
+  if (dist <= island.r) return 1.0;
+  const norm = (outerRadius - dist) / transitionMargin;
+  return norm * norm * (3 - 2 * norm);
+}
+
+/* Posição segura para navegação próxima à ilha de neve mais próxima */
+function getSnowIslandCoords(x = 0, z = 0) {
+  const nearest = nearestSnowIsland(x, z);
+  if (!nearest) return null;
+  const { island } = nearest;
+  return { x: island.x + island.r + 55, z: island.z + 10 };
+}
+
 /* Aproximação analítica ultrarrápida da elevação da ilha para amortecimento e contenção de ondas */
 function shoreClamp(x, z, rawY) {
   const ix = Math.floor(x / IC), iz = Math.floor(z / IC);
@@ -274,5 +314,5 @@ function regen() { cells.clear(); chunks.forEach(drop); chunks.clear(); queue.le
 function setCfg(k, v) { GEN[k] = v; calc(); regen() }
 function reseed() { WS = (Math.random() * 1e9 | 0) || 1; regen() }
 function setVD(v) { VD = v; plan.f = 1; bud = 50; }
-return { hit, startPos, safeNear, update, prime, setCfg, reseed, setVD, vd: () => VD, CS, tH, SEA, GEN, chunks, queue, nearestIsland, shoreClamp, setWireframe: on => { MAT.wireframe = on; } }
+return { hit, startPos, safeNear, update, prime, setCfg, reseed, setVD, vd: () => VD, CS, tH, SEA, GEN, chunks, queue, nearestIsland, nearestSnowIsland, getSnowIslandFactor, getSnowIslandCoords, shoreClamp, setWireframe: on => { MAT.wireframe = on; } }
 })(ilhasRoot);

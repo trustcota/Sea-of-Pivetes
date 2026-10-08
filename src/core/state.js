@@ -1,3 +1,4 @@
+export const WEATHER = { type: 'CLEAR', label: 'Céu Limpo', dynamic: true, timer: 240 };
 export const S = { c: .01, t: .01, time: 8.0 };
 export const WI = { dir: .45, a: .45, str: .5, s: .5, wsp: 6.5 };
 export const ST = { v: 0, hd: 0, heel: 0, hr: 0, sw: 0, r: 0, fl: 0, px: 0, pz: 0, svx: 0, svz: 0, vy: 0.4, pt: 0, rl: 0 };
@@ -47,6 +48,8 @@ const savedSettings = (() => {
 })();
 
 export const SETTINGS = Object.assign({
+  weatherDynamic: true,
+  weatherType: 'CLEAR',
   oceanCondition: 0.01,
   waveIntensity: 1,
   windStrength: 0.5,

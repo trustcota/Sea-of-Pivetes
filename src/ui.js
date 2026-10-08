@@ -1,9 +1,10 @@
 import { clamp, D2, wrapA } from './core/math.js';
-import { S, WI, ST, CAM, UIS, HM, AN, INT, keys, GAME, SETTINGS, saveSettingsState } from './core/state.js';
+import { S, WI, ST, LT, CAM, UIS, HM, AN, INT, keys, GAME, SETTINGS, saveSettingsState, WEATHER } from './core/state.js';
 import { setFpv, resetPlayer } from './ship/player.js';
 import { SH } from './ship/ship.js';
 import { ILHAS } from './world/archipelago.js';
 import { sea } from './world/ocean.js';
+import { weatherManager, WEATHER_TYPES, WEATHER_CONFIG } from './world/weather.js';
 import { setupRadialMenu, updateRadialOrdersVisibility } from './radialMenu.js';
 
 export const degN = r => ((Math.round(r / D2) % 360) + 360) % 360;
@@ -41,14 +42,24 @@ export function setupUI(actions = {}) {
 
   // Carrega e aplica configurações salvas do localStorage
   if (SETTINGS) {
+    if (SETTINGS.weatherDynamic !== undefined) {
+      weatherManager.setDynamic(SETTINGS.weatherDynamic);
+    }
+    if (SETTINGS.weatherType && WEATHER_TYPES[SETTINGS.weatherType]) {
+      weatherManager.setWeather(SETTINGS.weatherType, null, true);
+    }
     if (SETTINGS.oceanCondition !== undefined) {
       S.t = SETTINGS.oceanCondition;
+      weatherManager.values.waveScale = S.t;
+      weatherManager.fromValues.waveScale = S.t;
       const sl = $('sl');
       if (sl) sl.value = S.t * 100;
     }
     if (SETTINGS.windStrength !== undefined) {
       WI.str = SETTINGS.windStrength > 1 ? SETTINGS.windStrength / 100 : SETTINGS.windStrength;
       SETTINGS.windStrength = WI.str;
+      weatherManager.values.windStr = WI.str;
+      weatherManager.fromValues.windStr = WI.str;
       const wsl = $('wsl');
       if (wsl) wsl.value = Math.round(WI.str * 100);
       const modalWsl = $('modal-wsl');
@@ -138,6 +149,24 @@ export function setupUI(actions = {}) {
     }
 
     modalSeaBtns.forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.modalSea - S.t) < 0.05));
+
+    // Sincroniza estado do clima dinâmico
+    const weatherStatusEl = $('modal-weather-status');
+    if (weatherStatusEl) {
+      const timeMin = Math.floor(WEATHER.timer / 60);
+      const timeSec = WEATHER.timer % 60;
+      const timeStr = `${timeMin}:${timeSec < 10 ? '0' : ''}${timeSec}`;
+      weatherStatusEl.textContent = `${WEATHER.label} (${weatherManager.dynamic ? `Próximo: ${timeStr}` : 'Manual'})`;
+    }
+    const btnWeatherAuto = $('modal-weather-auto');
+    const btnWeatherManual = $('modal-weather-manual');
+    if (btnWeatherAuto) btnWeatherAuto.classList.toggle('on', weatherManager.dynamic);
+    if (btnWeatherManual) btnWeatherManual.classList.toggle('on', !weatherManager.dynamic);
+
+    document.querySelectorAll('button[data-modal-weather]').forEach(b => {
+      b.classList.toggle('on', b.dataset.modalWeather === weatherManager.target);
+    });
+
     const curVd = ILHAS.vd();
     modalVdBtns.forEach(b => b.classList.toggle('on', +b.dataset.modalVd === curVd));
     const modalRg = $('modal-mapa-rg'), modalRgVal = $('modal-mapa-rg-val');
@@ -254,15 +283,105 @@ export function setupUI(actions = {}) {
   if (btnCloseControls) btnCloseControls.onclick = closeControls;
   if (btnConfirmControls) btnConfirmControls.onclick = closeControls;
 
+  // Controles do Clima Dinâmico no modal de Ajustes
+  const btnWeatherAuto = $('modal-weather-auto');
+  const btnWeatherManual = $('modal-weather-manual');
+  if (btnWeatherAuto) {
+    btnWeatherAuto.onclick = () => {
+      weatherManager.setDynamic(true);
+      weatherManager.userWindOverride = false;
+      weatherManager.userWaveOverride = false;
+      SETTINGS.weatherDynamic = true;
+      saveSettingsState();
+      syncSettingsModal();
+    };
+  }
+  if (btnWeatherManual) {
+    btnWeatherManual.onclick = () => {
+      weatherManager.setDynamic(false);
+      SETTINGS.weatherDynamic = false;
+      saveSettingsState();
+      syncSettingsModal();
+    };
+  }
+
+  document.querySelectorAll('button[data-modal-weather]').forEach(b => {
+    b.onclick = () => {
+      const type = b.dataset.modalWeather;
+      if (type && WEATHER_TYPES[type]) {
+        const cfg = WEATHER_CONFIG[type];
+        weatherManager.userWindOverride = false;
+        weatherManager.userWaveOverride = false;
+        weatherManager.setWeather(type);
+        if (cfg) {
+          weatherManager.values.windStr = cfg.targetWindStr;
+          weatherManager.fromValues.windStr = cfg.targetWindStr;
+          WI.str = cfg.targetWindStr;
+          weatherManager.values.waveScale = cfg.targetWaveScale;
+          weatherManager.fromValues.waveScale = cfg.targetWaveScale;
+          S.t = cfg.targetWaveScale;
+          setWindStr(cfg.targetWindStr);
+
+          // Sincroniza parâmetros atmosféricos e de precipitação
+          weatherManager.values.rainIntensity = cfg.rainIntensity;
+          weatherManager.fromValues.rainIntensity = cfg.rainIntensity;
+          weatherManager.values.stormIntensity = cfg.stormIntensity;
+          weatherManager.fromValues.stormIntensity = cfg.stormIntensity;
+          weatherManager.values.fogExtraDensity = cfg.fogExtraDensity;
+          weatherManager.fromValues.fogExtraDensity = cfg.fogExtraDensity;
+
+          if (type === 'STORM') {
+            // Em tempestade manual: programa primeiro relâmpago e trovão com resposta rápida (0.9s)
+            LT.nl = 0.9;
+          }
+        }
+        SETTINGS.weatherType = type;
+        SETTINGS.windStrength = WI.str;
+        SETTINGS.oceanCondition = S.t;
+        saveSettingsState();
+        syncSettingsModal();
+      }
+    };
+  });
+
+  const btnSnowIsland = $('modal-btn-snow-island');
+  const navigateToSnow = () => {
+    if (ILHAS && ILHAS.getSnowIslandCoords) {
+      const coords = ILHAS.getSnowIslandCoords(ST.px, ST.pz);
+      if (coords) {
+        ST.px = coords.x;
+        ST.pz = coords.z;
+        AN.ax = coords.x;
+        AN.az = coords.z + 5;
+        ILHAS.update(ST.px, ST.pz, 0);
+        ILHAS.prime();
+        weatherManager.update(0.1, ST.px, ST.pz);
+        syncSettingsModal();
+      }
+    }
+  };
+  if (btnSnowIsland) {
+    btnSnowIsland.onclick = navigateToSnow;
+  }
+  window.teleportToSnowIsland = navigateToSnow;
+
   // Sincronização dos controles dentro do modal de Ajustes
   modalSeaBtns.forEach(b => b.onclick = () => {
     S.t = +b.dataset.modalSea;
+    weatherManager.userWaveOverride = true;
+    weatherManager.values.waveScale = S.t;
+    weatherManager.fromValues.waveScale = S.t;
     const sl = $('sl');
     if (sl) sl.value = S.t * 100;
-    setWindStr(.12 + .85 * S.t);
+    const targetW = .12 + .85 * S.t;
+    setWindStr(targetW);
+    weatherManager.userWindOverride = true;
+    weatherManager.values.windStr = targetW;
+    weatherManager.fromValues.windStr = targetW;
     syncSettingsModal();
     SETTINGS.oceanCondition = S.t;
     SETTINGS.waveIntensity = Math.round(S.t * 100);
+    SETTINGS.windStrength = targetW;
     saveSettingsState();
   });
 
@@ -270,14 +389,25 @@ export function setupUI(actions = {}) {
   if (modalSl) {
     modalSl.oninput = () => {
       S.t = modalSl.value / 100;
+      weatherManager.userWaveOverride = true;
+      weatherManager.values.waveScale = S.t;
+      weatherManager.fromValues.waveScale = S.t;
       const sl = $('sl');
       if (sl) sl.value = modalSl.value;
-      setWindStr(.12 + .85 * S.t);
+      const targetW = .12 + .85 * S.t;
+      setWindStr(targetW);
+      weatherManager.userWindOverride = true;
+      weatherManager.values.windStr = targetW;
+      weatherManager.fromValues.windStr = targetW;
       const valEl = $('modal-sl-val');
       if (valEl) valEl.textContent = modalSl.value + '%';
+      const modalWsl = $('modal-wsl'), modalWslVal = $('modal-wsl-val');
+      if (modalWsl) modalWsl.value = Math.round(targetW * 100);
+      if (modalWslVal) modalWslVal.textContent = Math.round(targetW * 100) + '%';
       modalSeaBtns.forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.modalSea - S.t) < 0.05));
       SETTINGS.oceanCondition = S.t;
       SETTINGS.waveIntensity = +modalSl.value;
+      SETTINGS.windStrength = targetW;
       saveSettingsState();
     };
   }
@@ -286,6 +416,9 @@ export function setupUI(actions = {}) {
   if (modalWsl) {
     modalWsl.oninput = () => {
       WI.str = modalWsl.value / 100;
+      weatherManager.userWindOverride = true;
+      weatherManager.values.windStr = WI.str;
+      weatherManager.fromValues.windStr = WI.str;
       const wsl = $('wsl');
       if (wsl) wsl.value = modalWsl.value;
       const valEl = $('modal-wsl-val');
@@ -410,31 +543,59 @@ export function setupUI(actions = {}) {
   const stx = $('st');
   btn.forEach(b => b.onclick = () => {
     S.t = +b.dataset.s;
+    weatherManager.userWaveOverride = true;
+    weatherManager.values.waveScale = S.t;
+    weatherManager.fromValues.waveScale = S.t;
     if (sl) sl.value = S.t * 100;
-    setWindStr(.12 + .85 * S.t);
+    const targetW = .12 + .85 * S.t;
+    setWindStr(targetW);
+    weatherManager.userWindOverride = true;
+    weatherManager.values.windStr = targetW;
+    weatherManager.fromValues.windStr = targetW;
     const modalSl = $('modal-sl');
     if (modalSl) {
       modalSl.value = Math.round(S.t * 100);
       const valEl = $('modal-sl-val');
       if (valEl) valEl.textContent = Math.round(S.t * 100) + '%';
     }
+    const modalWsl = $('modal-wsl');
+    if (modalWsl) {
+      modalWsl.value = Math.round(targetW * 100);
+      const valEl = $('modal-wsl-val');
+      if (valEl) valEl.textContent = Math.round(targetW * 100) + '%';
+    }
     modalSeaBtns.forEach(sb => sb.classList.toggle('on', Math.abs(+sb.dataset.modalSea - S.t) < 0.05));
     SETTINGS.oceanCondition = S.t;
     SETTINGS.waveIntensity = Math.round(S.t * 100);
+    SETTINGS.windStrength = targetW;
     saveSettingsState();
   });
   if (sl) sl.oninput = () => {
     S.t = sl.value / 100;
-    setWindStr(.12 + .85 * S.t);
+    weatherManager.userWaveOverride = true;
+    weatherManager.values.waveScale = S.t;
+    weatherManager.fromValues.waveScale = S.t;
+    const targetW = .12 + .85 * S.t;
+    setWindStr(targetW);
+    weatherManager.userWindOverride = true;
+    weatherManager.values.windStr = targetW;
+    weatherManager.fromValues.windStr = targetW;
     const modalSl = $('modal-sl');
     if (modalSl) {
       modalSl.value = sl.value;
       const valEl = $('modal-sl-val');
       if (valEl) valEl.textContent = sl.value + '%';
     }
+    const modalWsl = $('modal-wsl');
+    if (modalWsl) {
+      modalWsl.value = Math.round(targetW * 100);
+      const valEl = $('modal-wsl-val');
+      if (valEl) valEl.textContent = Math.round(targetW * 100) + '%';
+    }
     modalSeaBtns.forEach(sb => sb.classList.toggle('on', Math.abs(+sb.dataset.modalSea - S.t) < 0.05));
     SETTINGS.oceanCondition = S.t;
     SETTINGS.waveIntensity = +sl.value;
+    SETTINGS.windStrength = targetW;
     saveSettingsState();
   };
 
@@ -504,8 +665,13 @@ export function setupUI(actions = {}) {
   // Vento, rumo e leme
   if (wsl) wsl.oninput = () => {
     WI.str = wsl.value / 100;
+    weatherManager.userWindOverride = true;
+    weatherManager.values.windStr = WI.str;
+    weatherManager.fromValues.windStr = WI.str;
     const modalWsl = $('modal-wsl');
     if (modalWsl) modalWsl.value = wsl.value;
+    const modalWslVal = $('modal-wsl-val');
+    if (modalWslVal) modalWslVal.textContent = wsl.value + '%';
     SETTINGS.windStrength = WI.str;
     saveSettingsState();
   };
@@ -627,6 +793,36 @@ export function setupUI(actions = {}) {
 
   setupRadialMenu({ setAll });
 
+  function syncLiveSettingsModal() {
+    if (!settingsModal || settingsModal.style.display === 'none') return;
+
+    const weatherStatusEl = $('modal-weather-status');
+    if (weatherStatusEl) {
+      const timeMin = Math.floor(WEATHER.timer / 60);
+      const timeSec = WEATHER.timer % 60;
+      const timeStr = `${timeMin}:${timeSec < 10 ? '0' : ''}${timeSec}`;
+      weatherStatusEl.textContent = `${WEATHER.label} (${weatherManager.dynamic ? `Próximo: ${timeStr}` : 'Manual'})`;
+    }
+
+    const modalWsl = $('modal-wsl'), modalWslVal = $('modal-wsl-val');
+    if (modalWsl && document.activeElement !== modalWsl) {
+      modalWsl.value = Math.round(WI.str * 100);
+      if (modalWslVal) modalWslVal.textContent = Math.round(WI.str * 100) + '%';
+    }
+
+    const modalSl = $('modal-sl'), modalSlVal = $('modal-sl-val');
+    if (modalSl && document.activeElement !== modalSl) {
+      modalSl.value = Math.round(S.t * 100);
+      if (modalSlVal) modalSlVal.textContent = Math.round(S.t * 100) + '%';
+    }
+
+    document.querySelectorAll('button[data-modal-weather]').forEach(b => {
+      b.classList.toggle('on', b.dataset.modalWeather === weatherManager.target);
+    });
+
+    modalSeaBtns.forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.modalSea - S.t) < 0.05));
+  }
+
   return {
     rows,
     SL,
@@ -637,7 +833,8 @@ export function setupUI(actions = {}) {
     mapTick,
     mapRelocate,
     setAll,
-    setWindStr
+    setWindStr,
+    syncLiveSettingsModal
   };
 }
 

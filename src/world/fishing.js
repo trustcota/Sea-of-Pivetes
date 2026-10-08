@@ -511,7 +511,7 @@ export class FishingSystem {
 
   cast() {
     if (this.currentRodIdx > 3) {
-      Audio.carretel.iniciar(80);
+      Audio.reelStart(80);
       this.playSfx('cast_whistle');
     }
     this.state = 'cast';
@@ -548,7 +548,7 @@ export class FishingSystem {
   }
 
   startReel(f) {
-    Audio.carretel.parar(true);
+    Audio.reelStop(true);
     this.fish = f;
     this.state = 'reel';
     this.progress = 0;

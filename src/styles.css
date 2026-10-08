@@ -1267,7 +1267,7 @@ body.touch-device #ginc.on {
   position: fixed;
   inset: 0;
   z-index: 2000;
-  background: rgba(12, 9, 6, 0.65);
+  background: #080605; /* Fundo 100% sólido e escuro para alto contraste */
   backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
@@ -1298,7 +1298,7 @@ body.touch-device #ginc.on {
   letter-spacing: 1.5px;
   text-shadow: 0 2px 8px rgba(0,0,0,0.9), 0 0 12px rgba(197, 146, 31, 0.5);
   margin-bottom: clamp(10px, 2vmin, 18px);
-  background: rgba(28, 18, 12, 0.7);
+  background: #1c120c; /* Sólido */
   padding: 5px 16px;
   border: 2px solid var(--acc);
   border-radius: 20px;
@@ -1324,30 +1324,30 @@ body.touch-device #ginc.on {
 }
 
 .gta-slice-path {
-  fill: rgba(28, 18, 12, 0.88);
-  stroke: rgba(197, 146, 31, 0.45);
+  fill: var(--parchment); /* Sólido Pergaminho (Igual ao círculo central) */
+  stroke: var(--line); /* Sólido */
   stroke-width: 2px;
   cursor: pointer;
   transition: fill 0.12s ease, transform 0.12s ease, filter 0.12s ease, stroke 0.12s ease;
 }
 
 .gta-slice-path:hover, .gta-slice-path.active {
-  fill: rgba(197, 146, 31, 0.95);
-  stroke: var(--crimson);
-  stroke-width: 3.5px;
+  fill: var(--acc); /* Sólido Ouro */
+  stroke: var(--line);
+  stroke-width: 2.5px;
   filter: drop-shadow(0 0 16px rgba(197, 146, 31, 0.95));
 }
 
 .gta-slice-path.disabled {
-  fill: rgba(20, 15, 12, 0.6);
-  stroke: rgba(100, 80, 60, 0.3);
+  fill: #cbbba1; /* Pergaminho mais escuro sólido */
+  stroke: #8d7a64; /* Sólido */
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 1;
 }
 
 .gta-slice-path.disabled:hover, .gta-slice-path.disabled.active {
-  fill: rgba(35, 25, 20, 0.7);
-  stroke: rgba(140, 100, 70, 0.4);
+  fill: #cbbba1;
+  stroke: #8d7a64;
   filter: none;
 }
 
@@ -1359,84 +1359,151 @@ body.touch-device #ginc.on {
 }
 
 .gta-subslice-path {
-  fill: rgba(18, 12, 8, 0.92);
-  stroke: rgba(0, 217, 255, 0.65);
+  fill: var(--parchment-light); /* Sólido */
+  stroke: var(--line); /* Sólido */
   stroke-width: 1.5px;
   cursor: pointer;
   transition: fill 0.12s ease, stroke 0.12s ease, filter 0.12s ease;
 }
 
 .gta-subslice-path:hover, .gta-subslice-path.active {
-  fill: rgba(0, 217, 255, 0.95);
-  stroke: #ffffff;
+  fill: var(--acc-light); /* Sólido */
+  stroke: var(--line);
   stroke-width: 2.5px;
-  filter: drop-shadow(0 0 14px rgba(0, 217, 255, 0.9));
+  filter: drop-shadow(0 0 14px rgba(197, 146, 31, 0.9));
 }
 
 .gta-subslice-path.equipped {
-  fill: rgba(45, 30, 10, 0.95);
-  stroke: #FFD400;
+  fill: #ffeaa7; /* Sólido */
+  stroke: var(--crimson);
   stroke-width: 2px;
-  filter: drop-shadow(0 0 8px rgba(255, 212, 0, 0.5));
+  filter: drop-shadow(0 0 8px rgba(166, 42, 34, 0.5));
 }
 
 .gta-subslice-path.equipped:hover, .gta-subslice-path.equipped.active {
-  fill: #FFD400;
-  stroke: #ffffff;
+  fill: var(--acc);
+  stroke: var(--line);
   stroke-width: 2.5px;
-  filter: drop-shadow(0 0 14px rgba(255, 212, 0, 0.95));
+  filter: drop-shadow(0 0 14px rgba(197, 146, 31, 0.95));
 }
 
-.gta-center-hub {
+.gta-center-hub-split {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: clamp(92px, 28%, 116px);
-  height: clamp(92px, 28%, 116px);
+  width: clamp(96px, 28%, 120px);
+  height: clamp(96px, 28%, 120px);
   border-radius: 50%;
-  background: radial-gradient(circle, var(--parchment-light) 0%, var(--parchment) 100%);
   border: 3px solid var(--line);
   box-shadow: inset 0 0 12px rgba(0,0,0,0.3), 0 4px 18px rgba(0,0,0,0.7);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 4px;
-  box-sizing: border-box;
-  pointer-events: none;
+  overflow: hidden;
+  z-index: 2100;
+  pointer-events: auto;
 }
 
-.gta-center-hub .hub-emblem {
+.hub-half {
+  width: 100% !important;
+  height: 50% !important;
+  margin: 0 !important;
+  padding: 2px 4px !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: var(--parchment) !important;
+  color: var(--ink) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  pointer-events: auto !important;
+  transition: background 0.1s ease, color 0.1s ease !important;
+}
+
+.hub-half.top {
+  border-bottom: 2.5px solid var(--line) !important;
+  border-radius: 0 !important;
+}
+
+.hub-half.bottom {
+  border-radius: 0 !important;
+}
+
+.hub-half:hover {
+  background: var(--parchment-light) !important;
+}
+
+.hub-half:active, .hub-half.active {
+  background: var(--acc) !important;
+  color: var(--on) !important;
+  transform: none !important;
+}
+
+.hub-half-icon {
+  font-size: clamp(14px, 4vmin, 18px);
+  line-height: 1;
+}
+
+.hub-half-label {
+  font-family: 'Cinzel', serif;
+  font-weight: 800;
+  font-size: clamp(7.5px, 2vmin, 9.5px);
+  margin-top: 1px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.gta-center-hub-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(96px, 28%, 120px);
+  height: clamp(96px, 28%, 120px);
+  border-radius: 50% !important;
+  border: 3px solid var(--line) !important;
+  box-shadow: inset 0 0 12px rgba(0,0,0,0.3), 0 4px 18px rgba(0,0,0,0.7) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: var(--parchment) !important;
+  color: var(--ink) !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  pointer-events: auto !important;
+  transition: background 0.1s ease, color 0.1s ease !important;
+  z-index: 2100;
+  margin: 0 !important;
+  padding: 4px !important;
+}
+
+.gta-center-hub-button:hover {
+  background: var(--parchment-light) !important;
+}
+
+.gta-center-hub-button:active, .gta-center-hub-button.active {
+  background: var(--acc) !important;
+  color: var(--on) !important;
+  transform: translate(-50%, -50%) !important; /* Mantém o alinhamento central */
+}
+
+.gta-center-hub-button .hub-icon {
   font-size: clamp(18px, 5.5vmin, 24px);
   line-height: 1;
 }
 
-.gta-center-hub .hub-label {
+.gta-center-hub-button .hub-label {
   font-family: 'Cinzel', serif;
   font-weight: 800;
   font-size: clamp(8px, 2.2vmin, 10.5px);
-  color: var(--crimson);
   margin-top: 2px;
   text-transform: uppercase;
   line-height: 1.15;
   letter-spacing: 0.5px;
-}
-
-.gta-center-hub .hub-sub {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: clamp(6.5px, 1.8vmin, 8.5px);
-  color: var(--ink);
-  opacity: 0.85;
-  margin-top: 2px;
-  line-height: 1.1;
-  max-width: 96%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
 .radial-menu-hint {

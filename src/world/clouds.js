@@ -25,6 +25,8 @@ const uniforms = {
   uSkyColor: { value: new T.Color(0x268ee8) },
   uFogColor: { value: new T.Color(0xc2e0ff) },
   uStorm: { value: 0 },
+  uSnow: { value: 0 },
+  uFogLevel: { value: 0 },
   uCamPos: { value: new T.Vector3() }
 };
 
@@ -45,6 +47,8 @@ const fragmentShader = `
   uniform vec3 uSkyColor;
   uniform vec3 uFogColor;
   uniform float uStorm;
+  uniform float uSnow;
+  uniform float uFogLevel;
   uniform vec3 uCamPos;
 
   varying vec3 vWorldPos;
@@ -98,7 +102,8 @@ const fragmentShader = `
     for (int i = 0; i < 6; i++) {
       vec2 samplePos = uv + V.xz * (float(i) * stepSize * 0.004);
       float d = fbm(samplePos + sin(uTime * 0.02 + float(i) * 1.5) * 0.04);
-      float layerDensity = smoothstep(0.38 - uStorm * 0.22, 0.76, d);
+      float effectiveStorm = max(uStorm, uSnow * 0.75);
+      float layerDensity = smoothstep(0.38 - effectiveStorm * 0.22 - uFogLevel * 0.16, 0.76, d);
       density += layerDensity * (1.0 - density);
 
       vec2 lightSamplePos = samplePos + uSunDir.xz * 0.07;
@@ -129,6 +134,15 @@ const fragmentShader = `
     if (uStorm > 0.01) {
       vec3 stormColor = vec3(0.09, 0.12, 0.16);
       cloudColor = mix(cloudColor, stormColor, uStorm * 0.85);
+    }
+
+    if (uSnow > 0.01) {
+      vec3 snowCloudColor = vec3(0.18, 0.22, 0.28);
+      cloudColor = mix(cloudColor, snowCloudColor, uSnow * 0.75);
+    }
+
+    if (uFogLevel > 0.01) {
+      cloudColor = mix(cloudColor, fogBase * 0.95, uFogLevel * 0.82);
     }
 
     float horizonFade = clamp((1200.0 - t) / 450.0, 0.0, 1.0);
@@ -163,7 +177,7 @@ const vn = (x, z) => {
 };
 
 // Atualiza todas as nuvens: vento, deformação, clima e cálculo de oclusão solar
-export function updateCloudsSystem(dt, now, vwx, vwz, wang, wsp, weatherState) {
+export function updateCloudsSystem(dt, now, vwx, vwz, wang, wsp, weatherState, snowFactor = 0, fogLevel = 0) {
   uniforms.uTime.value += dt;
 
   // Direção do Sol/Lua (relativa ao navio)
@@ -180,6 +194,8 @@ export function updateCloudsSystem(dt, now, vwx, vwz, wang, wsp, weatherState) {
     uniforms.uFogColor.value.copy(sc.fog.color);
   }
   uniforms.uStorm.value = weatherState;
+  uniforms.uSnow.value = snowFactor;
+  uniforms.uFogLevel.value = fogLevel;
 
   // Pega posição do jogador e centra as nuvens sobre ele
   cam.getWorldPosition(wp);
@@ -194,7 +210,8 @@ export function updateCloudsSystem(dt, now, vwx, vwz, wang, wsp, weatherState) {
   
   const baseNoise = vn(sampleX, sampleZ);
   const rawOcc = T.MathUtils.clamp((baseNoise - 0.38) / 0.45, 0, 1);
-  cloudState.sunOcclusion = T.MathUtils.lerp(rawOcc * 0.45, 0.95, weatherState);
+  const totalWeatherOcc = Math.max(weatherState, snowFactor * 0.7, fogLevel * 0.8);
+  cloudState.sunOcclusion = T.MathUtils.lerp(rawOcc * 0.45, 0.98, totalWeatherOcc);
 
   // Nuvens volumétricas no shader cobrem as sombras diretamente de forma integrada
   cloudState.shadows.length = 0;

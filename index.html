@@ -132,13 +132,13 @@
         <g id="gta-slices-group"></g>
       </svg>
       
-      <!-- Hub Central -->
-      <div id="radial-center-btn" class="gta-center-hub">
-        <div class="hub-emblem" id="radial-hub-icon">⚓</div>
-        <div class="hub-label" id="radial-hub-text">ORDENS</div>
-        <div class="hub-sub" id="radial-hub-desc"></div>
-      </div>
+      <!-- Hub Central (Single unified button: Close/Back) -->
+      <button id="radial-hub-center" class="gta-center-hub-button" title="Fechar / Voltar">
+        <span id="radial-hub-icon" class="hub-icon">✕</span>
+        <span id="radial-hub-label" class="hub-label">FECHAR</span>
+      </button>
     </div>
+    <div id="radial-hub-desc" class="radial-menu-hint">Puxe o analógico ou use o mouse para selecionar uma ordem</div>
   </div>
 </div>
 
@@ -185,6 +185,27 @@
 
       <!-- Tab 2: Marítimo -->
       <div class="settings-tab-pane" data-pane="maritimo">
+        <div class="settings-group">
+          <div class="label-with-val">
+            <label class="settings-label" style="margin: 0;">Clima Dinâmico</label>
+            <span id="modal-weather-status" style="font-size: 11px; opacity: 0.85;">Céu Limpo</span>
+          </div>
+          <div class="settings-btn-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 6px;">
+            <button id="modal-weather-auto" class="opt-btn on">Ciclo: Automático</button>
+            <button id="modal-weather-manual" class="opt-btn">Ciclo: Manual</button>
+          </div>
+          <div class="settings-btn-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+            <button class="opt-btn" data-modal-weather="CLEAR">Sol</button>
+            <button class="opt-btn" data-modal-weather="FOG_LOW">Bruma</button>
+            <button class="opt-btn" data-modal-weather="FOG_MED">Neblina Média</button>
+            <button class="opt-btn" data-modal-weather="FOG_SEVERE">Neblina Severa</button>
+            <button class="opt-btn" data-modal-weather="RAIN">Chuva</button>
+            <button class="opt-btn" data-modal-weather="STORM">Tempestade</button>
+          </div>
+          <div class="settings-btn-grid" style="grid-template-columns: 1fr; margin-top: 6px;">
+            <button id="modal-btn-snow-island" class="opt-btn" title="Posicionar navio próximo a uma ilha nevada de tundra">❄ Navegar para Ilha de Neve</button>
+          </div>
+        </div>
         <div class="settings-group">
           <label class="settings-label">Condição do Oceano</label>
           <div class="settings-btn-grid">
