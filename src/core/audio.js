@@ -150,23 +150,33 @@ function peixe_convez(c, o, t) {
 function criarCarretelLancando(ac, saida) {
   let rodando = false, rate = 0, prox = 0, timer = null;
   function agendar() {
+    if (!rodando || rate <= 0) return;
     const agora = ac.currentTime;
     while (prox < agora + 0.1) {
       click(ac, saida, Math.max(prox, agora));
-      prox += (1 / Math.max(rate, 1)) * (0.92 + Math.random() * 0.16);
+      prox += (1 / Math.max(rate, 0.1)) * (0.92 + Math.random() * 0.16);
     }
   }
   return {
     iniciar(cliquesPorSeg = 80) {
-      if (rodando) return;
-      rodando = true; rate = cliquesPorSeg; prox = ac.currentTime;
-      timer = setInterval(agendar, 25);
+      rate = cliquesPorSeg;
+      if (!rodando) {
+        rodando = true;
+        prox = ac.currentTime;
+        timer = setInterval(agendar, 25);
+      }
       agendar();
     },
-    velocidade(cliquesPorSeg) { rate = cliquesPorSeg; },
+    velocidade(cliquesPorSeg) {
+      rate = cliquesPorSeg;
+    },
     parar(comFreada = true) {
       if (!rodando) return;
-      rodando = false; clearInterval(timer);
+      rodando = false;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
       if (comFreada) freada(ac, saida, ac.currentTime);
     }
   };
@@ -185,7 +195,9 @@ class AudioManager {
 
   init() {
     if (this.ctx) return;
-    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    this.ctx = new AudioCtx();
     this.master = this.ctx.createGain();
     this.master.gain.value = 0.6;
     this.master.connect(this.ctx.destination);
@@ -193,6 +205,7 @@ class AudioManager {
     this.enabled = true;
 
     document.addEventListener('visibilitychange', () => {
+      if (!this.ctx) return;
       if (document.hidden) this.ctx.suspend();
       else this.ctx.resume();
     });
@@ -205,6 +218,7 @@ class AudioManager {
   }
 
   play(name, params = {}) {
+    if (!this.enabled) this.init();
     if (!this.enabled) return;
     this.resume();
     const t = this.ctx.currentTime;
@@ -222,6 +236,7 @@ class AudioManager {
       case 'linha_assobio': linha_assobio(this.ctx, g, t); break;
       case 'click': click(this.ctx, g, t); break;
       case 'freada': freada(this.ctx, g, t); break;
+      case 'carretel_freada': freada(this.ctx, g, t); break;
       case 'onda_casco': casco(this.ctx, g, t, params.k || 1); break;
       case 'onda_praia': praia(this.ctx, g, t); break;
       case 'gaivota': gaivota(this.ctx, g, t); break;
@@ -229,6 +244,32 @@ class AudioManager {
       case 'peixe_agua': peixe_agua(this.ctx, g, t); break;
       case 'peixe_convez': peixe_convez(this.ctx, g, t); break;
       case 'gotas': gotas(this.ctx, g, t); break;
+    }
+  }
+
+  reelStart(rate = 80) {
+    if (!this.enabled) this.init();
+    this.resume();
+    if (this.carretel) {
+      this.carretel.iniciar(rate);
+    }
+  }
+
+  reelSpeed(rate) {
+    if (!this.enabled) this.init();
+    if (this.carretel) {
+      if (rate <= 0) {
+        this.carretel.velocidade(0);
+      } else {
+        this.carretel.iniciar(rate);
+        this.carretel.velocidade(rate);
+      }
+    }
+  }
+
+  reelStop(comFreada = true) {
+    if (this.carretel) {
+      this.carretel.parar(comFreada);
     }
   }
 

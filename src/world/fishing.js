@@ -479,7 +479,7 @@ export class FishingSystem {
   }
 
   cast() {
-    Audio.reelStart(80);
+    Audio.carretel.iniciar(80);
     this.playSfx('cast_whistle');
     this.state = 'cast';
     this.castTimer = 0;
@@ -515,7 +515,7 @@ export class FishingSystem {
   }
 
   startReel(f) {
-    Audio.reelStart(0);
+    Audio.carretel.parar(true);
     this.fish = f;
     this.state = 'reel';
     this.progress = 0;
@@ -536,12 +536,23 @@ export class FishingSystem {
 
   escape() {
     Audio.reelStop(false);
-    this.fish = null;
+    
+    // Animação de fuga: peixe nada rápido para longe
+    if (this.fish) {
+      this.fish.isFleeing = true;
+      this.fish.fleeSpeed = 8.0;
+      this.fish.fleeDir = Math.atan2(this.fishPos.z - this.bp.z, this.fishPos.x - this.bp.x) + Math.PI;
+      this.say('O peixe fugiu!', 2.0);
+    }
+
     this.detach();
-    this.state = 'idle';
+    this.fish = null;
     this.tension = 0;
     this.flick = 1.2;
-    this.say('O peixe escapou!', 2.4);
+    
+    // Retorna para wait para novo peixe tentar, não para idle (recolher linha)
+    this.state = 'wait';
+    this.timer = rnd(3.0, 8.0);
   }
 
   lose() {
@@ -1139,6 +1150,18 @@ export class FishingSystem {
         const speed = Math.hypot(vx, vz);
         if (speed > 1.2 && (!f.jumpY || f.jumpY <= 0)) {
           spawnLineWake(this.bp.x, this.bp.z, vx, vz);
+        }
+      } else if (f.isFleeing) {
+        // Animação de fuga: peixe nada rápido para longe e depois é deletado
+        this.fishPos.x += Math.cos(f.fleeDir) * f.fleeSpeed * dt;
+        this.fishPos.z += Math.sin(f.fleeDir) * f.fleeSpeed * dt;
+        this.fishYaw = f.fleeDir + Math.PI / 2;
+        
+        // Remove o peixe após a fuga visual
+        f.fleeSpeed -= dt * 2;
+        if (f.fleeSpeed <= 0) {
+          this.fish = null;
+          this.detach();
         }
       } else {
         this.counterControl = 0;
