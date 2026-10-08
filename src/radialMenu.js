@@ -2,8 +2,9 @@ import { AN, HM, CAM, GAME, INT } from './core/state.js';
 import { setFpv } from './ship/player.js';
 import { SH } from './ship/ship.js';
 import { cv } from './core/renderer.js';
-import { fishingSystem } from './world/fishing.js';
+import { fishingSystem, RODS, CAP } from './world/fishing.js';
 import { bestiaryModal } from './ui/BestiaryModal.js';
+import { playerEquipment } from './ship/playerEquipment.js';
 
 let setAllFn = null;
 let activeMenu = 'main';
@@ -15,6 +16,45 @@ let toastTimeout = null;
 let rjoy = { id: -1, x0: 0, y0: 0, dx: 0, dy: 0 };
 
 const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
+
+const LANTERN_SUB_TABS = [
+  { id: 'hand', label: 'Na Mão', fullLabel: 'Empunhar na Mão Esquerda', icon: '🖐️' },
+  { id: 'belt', label: 'No Cinto', fullLabel: 'Guardar no Cinto', icon: '🪢' }
+];
+
+function getFishingRodSubTabs() {
+  const curIdx = (fishingSystem && typeof fishingSystem.currentRodIdx === 'number') ? fishingSystem.currentRodIdx : 0;
+  const isEquipped = !!(fishingSystem && fishingSystem.equipped);
+
+  const shortNames = [
+    '1. Cana',
+    '2. Aveleira',
+    '3. Bambu',
+    '4. Freixo',
+    '5. Carretel',
+    '6. Molinete',
+    '7. C-Mestre',
+    '8. Oficial',
+    '9. Imediato',
+    '10. Capitão'
+  ];
+
+  return RODS.map((rod, idx) => {
+    const isThisEquipped = isEquipped && curIdx === idx;
+    const capVal = CAP[idx] || 1.5;
+    const capStr = capVal >= 1000 ? '1 t' : `${capVal} kg`;
+
+    return {
+      id: `rod_${idx}`,
+      rodIdx: idx,
+      label: shortNames[idx] || `${idx + 1}. ${rod.n}`,
+      subLabel: capStr,
+      fullLabel: `${rod.n} (Capacidade: até ${capStr})`,
+      icon: '🎣',
+      isEquipped: isThisEquipped
+    };
+  });
+}
 
 function showRightJoycon(x, y) {
   const base = document.getElementById('joy-right-base');
@@ -201,7 +241,7 @@ const MENUS = {
       { id: 'anc_menu', label: 'Âncora', icon: '⚓', desc: 'Opções de Âncora', target: 'anchor' },
       { id: 'sail_menu', label: 'Velas', icon: '⛵', desc: 'Abertura das Velas', target: 'sails' },
       { id: 'rig_menu', label: 'Vergas', icon: '🔄', desc: 'Rotação das Vergas', target: 'rigs' },
-      { id: 'cam_menu', label: 'Visão / Luz', icon: '👁️', desc: 'Opções de Visão e Lanternas', target: 'camera' },
+      { id: 'cam_menu', label: 'Câmera / Luz', icon: '🎥', desc: 'Opções de Visão e Lanternas', target: 'camera' },
       { id: 'back', label: 'Voltar', icon: '↩', desc: 'Voltar à roda principal', target: 'main' }
     ]
   },
@@ -365,9 +405,16 @@ const MENUS = {
         },
         {
           id: 'bestiary',
-          label: 'Bestiário',
+          get label() {
+            return 'Bestiário (Desativado)';
+          },
           icon: '📖',
-          desc: 'Registro de criaturas descobertas',
+          get disabled() {
+            return true;
+          },
+          get desc() {
+            return 'Bestiário desativado por hora (retorne mais tarde)';
+          },
           action: () => {
             if (bestiaryModal) bestiaryModal.open();
             closeRadialMenu();
@@ -375,28 +422,136 @@ const MENUS = {
         },
         {
           id: 'fishing_rod',
-          label: CAM.fpv ? 'Vara de Pesca' : 'Vara (Desativada)',
+          get label() {
+            if (!CAM.fpv) return 'Vara (Desativada)';
+            const isEquipped = !!(fishingSystem && fishingSystem.equipped);
+            return isEquipped ? 'Guardar Vara' : 'Vara de Pesca';
+          },
           icon: '🎣',
-          disabled: !CAM.fpv,
-          desc: CAM.fpv ? 'Equipar ou guardar sua vara de pesca artesanal' : 'Desativada na Câmera Livre (entre em FPV para pescar)',
+          get disabled() {
+            return !CAM.fpv;
+          },
+          get desc() {
+            if (!CAM.fpv) return 'Desativada na Câmera Livre (entre em FPV para pescar)';
+            const curIdx = (fishingSystem && typeof fishingSystem.currentRodIdx === 'number') ? fishingSystem.currentRodIdx : 0;
+            const rodName = RODS[curIdx] ? RODS[curIdx].n : 'Cana crua';
+            const capVal = CAP[curIdx] || 1.5;
+            const capStr = capVal >= 1000 ? '1 t' : `${capVal} kg`;
+            const isEquipped = !!(fishingSystem && fishingSystem.equipped);
+            if (isEquipped) {
+              return `Equipada: ${rodName} (até ${capStr}). Clique para guardar ou selecione outra vara ao redor.`;
+            }
+            return `Última: ${rodName} (até ${capStr}). Clique para equipar ou escolha uma das 10 ao redor.`;
+          },
+          subType: 'rod_select',
+          subRingMode: 'fullCircle',
+          get subTabs() {
+            if (!CAM.fpv) return [];
+            return getFishingRodSubTabs();
+          },
           action: () => {
             if (!CAM.fpv) {
               showOrderToast('🎣 Vara de pesca desativada na Câmera Livre (mude para FPV com V)');
               closeRadialMenu();
               return;
             }
-            if (fishingSystem) fishingSystem.toggleFishing();
+            if (fishingSystem) {
+              const curIdx = (typeof fishingSystem.currentRodIdx === 'number') ? fishingSystem.currentRodIdx : 0;
+              const rodName = RODS[curIdx] ? RODS[curIdx].n : 'Cana crua';
+              if (fishingSystem.equipped) {
+                fishingSystem.unequip();
+                showOrderToast(`🎣 ${rodName} guardada!`);
+              } else {
+                fishingSystem.equipRod(curIdx);
+                showOrderToast(`🎣 ${rodName} equipada!`);
+              }
+            }
             closeRadialMenu();
           }
         },
         {
-          id: 'cam_free',
-          label: 'Olhar Livre',
-          icon: '👁️',
-          desc: 'Alterna o modo olhar livre do capitão',
+          id: 'lantern',
+          get label() {
+            if (!CAM.fpv) return 'Lanterna (Desativada)';
+            if (!playerEquipment) return 'Lanterna';
+            return playerEquipment.lanternOn ? 'Lanterna (Acesa)' : 'Lanterna (Apagada)';
+          },
+          get icon() {
+            return (playerEquipment && playerEquipment.lanternOn) ? '💡' : '🏮';
+          },
+          get disabled() {
+            return !CAM.fpv;
+          },
+          get desc() {
+            if (!CAM.fpv) return 'Desativada na Câmera Livre (entre em FPV para usar lanterna)';
+            if (!playerEquipment) return 'Lanterna de exploração';
+            const pos = playerEquipment.lanternMode === 'hand' ? 'na mão esquerda' : 'guardada no cinto';
+            if (playerEquipment.lanternOn) {
+              return `Lanterna acesa (${pos}). Clique para apagar ou alterne entre mão e cinto ao redor.`;
+            }
+            return `Lanterna apagada (${pos}). Clique para acender ou alterne entre mão e cinto ao redor.`;
+          },
+          subType: 'lantern_equip',
+          get subTabs() {
+            if (!CAM.fpv) return [];
+            return LANTERN_SUB_TABS;
+          },
           action: () => {
-            INT.tFree = !INT.tFree;
-            showOrderToast('📜 Capitão: Olhar livre ' + (INT.tFree ? 'ativado' : 'desativado'));
+            if (!CAM.fpv) {
+              showOrderToast('💡 Lanterna desativada na Câmera Livre (mude para FPV com V)');
+              closeRadialMenu();
+              return;
+            }
+            if (playerEquipment) {
+              playerEquipment.toggleLanternPower();
+              showOrderToast(playerEquipment.lanternOn ? '💡 Lanterna acesa!' : '💡 Lanterna apagada!');
+            }
+            closeRadialMenu();
+          }
+        },
+        {
+          id: 'spyglass',
+          get label() {
+            if (!CAM.fpv) return 'Luneta (Desativada)';
+            if (!playerEquipment) return 'Luneta Náutica';
+            return playerEquipment.isSpyglassActive() ? 'Guardar Luneta' : 'Luneta Náutica';
+          },
+          icon: '🔭',
+          get disabled() {
+            return !CAM.fpv;
+          },
+          get desc() {
+            if (!CAM.fpv) return 'Desativada na Câmera Livre (entre em FPV para usar luneta)';
+            if (!playerEquipment) return 'Luneta náutica de longo alcance';
+            return playerEquipment.isSpyglassActive()
+              ? 'Mirando pela luneta com a mão direita (zoom 4x). Clique para recolher.'
+              : 'Segurar com a mão direita para avistar ilhas e recifes distantes (zoom 4x).';
+          },
+          action: () => {
+            if (!CAM.fpv) {
+              showOrderToast('🔭 Luneta desativada na Câmera Livre (mude para FPV com V)');
+              closeRadialMenu();
+              return;
+            }
+            if (playerEquipment) {
+              playerEquipment.toggleSpyglass();
+              showOrderToast(playerEquipment.isSpyglassActive() ? '🔭 Mirando pela Luneta Náutica (zoom 4x)' : '🔭 Luneta recolhida');
+            }
+            closeRadialMenu();
+          }
+        },
+        {
+          id: 'cam_toggle',
+          get label() {
+            return CAM.fpv ? 'Visão Orbital' : 'Primeira Pessoa';
+          },
+          icon: '🎥',
+          get desc() {
+            return CAM.fpv ? 'Alterna para a visão orbital (terceira pessoa)' : 'Entra na visão em primeira pessoa (FPV)';
+          },
+          action: () => {
+            setFpv(!CAM.fpv);
+            showOrderToast('📜 Capitão: ' + (CAM.fpv ? 'Primeira Pessoa (FPV)' : 'Visão Orbital'));
             closeRadialMenu();
           }
         },
@@ -584,24 +739,30 @@ function renderRadialMenu() {
     g.appendChild(labelText);
     slicesGroup.appendChild(g);
 
-    // Renderiza as 3 sub-abas se o item estiver selecionado
-    if (isActive && item.subTabs && item.subTabs.length) {
-      const subRIn = 143;
-      const subROut = 185;
+    // Renderiza as sub-abas se o item estiver selecionado e NÃO desativado
+    if (isActive && !item.disabled && item.subTabs && item.subTabs.length) {
+      const isFullCircle = item.subRingMode === 'fullCircle';
+      const subRIn = isFullCircle ? 144 : 143;
+      const subROut = isFullCircle ? 190 : 185;
       const subCount = item.subTabs.length;
-      const sliceArc = a2 - a1;
-      const subStep = sliceArc / subCount;
-      const subGap = 0.01;
+      const totalArc = isFullCircle ? (2 * Math.PI) : (a2 - a1);
+      const subStep = totalArc / subCount;
+      const baseStartAngle = isFullCircle ? (-Math.PI / 2 - subStep / 2) : a1;
+      const subGap = isFullCircle ? 0.015 : 0.01;
 
       item.subTabs.forEach((sub, sIdx) => {
-        const subA1 = a1 + (sIdx * subStep) + subGap;
-        const subA2 = a1 + ((sIdx + 1) * subStep) - subGap;
+        const subA1 = baseStartAngle + (sIdx * subStep) + subGap;
+        const subA2 = baseStartAngle + ((sIdx + 1) * subStep) - subGap;
         const subPathD = sectorPath(subRIn, subROut, subA1, subA2);
         const isSubActive = (sIdx === selectedSubIndex);
+        const isEquipped = !!sub.isEquipped;
 
         const subPathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         subPathEl.setAttribute('d', subPathD);
-        subPathEl.setAttribute('class', 'gta-subslice-path' + (isSubActive ? ' active' : ''));
+        let subClass = 'gta-subslice-path';
+        if (isSubActive) subClass += ' active';
+        if (isEquipped) subClass += ' equipped';
+        subPathEl.setAttribute('class', subClass);
 
         subPathEl.onclick = (e) => {
           e.stopPropagation();
@@ -626,18 +787,45 @@ function renderRadialMenu() {
         const subG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         subG.style.pointerEvents = 'none';
 
-        const subLabelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        subLabelText.setAttribute('x', stx.toFixed(1));
-        subLabelText.setAttribute('y', sty.toFixed(1));
-        subLabelText.setAttribute('text-anchor', 'middle');
-        subLabelText.setAttribute('dominant-baseline', 'middle');
-        subLabelText.setAttribute('font-size', '10');
-        subLabelText.setAttribute('font-weight', 'bold');
-        subLabelText.setAttribute('class', 'gta-slice-text-label');
-        subLabelText.setAttribute('fill', isSubActive ? '#000000' : '#00d9ff');
-        subLabelText.textContent = sub.label;
+        if (sub.subLabel) {
+          const subLabelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          subLabelText.setAttribute('x', stx.toFixed(1));
+          subLabelText.setAttribute('y', (sty - 4.5).toFixed(1));
+          subLabelText.setAttribute('text-anchor', 'middle');
+          subLabelText.setAttribute('dominant-baseline', 'middle');
+          subLabelText.setAttribute('font-size', '8.5');
+          subLabelText.setAttribute('font-weight', 'bold');
+          subLabelText.setAttribute('class', 'gta-slice-text-label');
+          subLabelText.setAttribute('fill', isSubActive ? '#000000' : (isEquipped ? '#FFD400' : '#ffffff'));
+          subLabelText.textContent = (isEquipped ? '★ ' : '') + sub.label;
 
-        subG.appendChild(subLabelText);
+          const subCapText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          subCapText.setAttribute('x', stx.toFixed(1));
+          subCapText.setAttribute('y', (sty + 6).toFixed(1));
+          subCapText.setAttribute('text-anchor', 'middle');
+          subCapText.setAttribute('dominant-baseline', 'middle');
+          subCapText.setAttribute('font-size', '7.5');
+          subCapText.setAttribute('font-weight', 'bold');
+          subCapText.setAttribute('class', 'gta-slice-text-label');
+          subCapText.setAttribute('fill', isSubActive ? '#000000' : (isEquipped ? '#ffeaa7' : '#00d9ff'));
+          subCapText.textContent = sub.subLabel;
+
+          subG.appendChild(subLabelText);
+          subG.appendChild(subCapText);
+        } else {
+          const subLabelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          subLabelText.setAttribute('x', stx.toFixed(1));
+          subLabelText.setAttribute('y', sty.toFixed(1));
+          subLabelText.setAttribute('text-anchor', 'middle');
+          subLabelText.setAttribute('dominant-baseline', 'middle');
+          subLabelText.setAttribute('font-size', '10');
+          subLabelText.setAttribute('font-weight', 'bold');
+          subLabelText.setAttribute('class', 'gta-slice-text-label');
+          subLabelText.setAttribute('fill', isSubActive ? '#000000' : '#00d9ff');
+          subLabelText.textContent = sub.label;
+          subG.appendChild(subLabelText);
+        }
+
         slicesGroup.appendChild(subG);
       });
     }
@@ -653,12 +841,23 @@ function renderRadialMenu() {
     if (selectedSubIndex >= 0 && cur.subTabs && cur.subTabs[selectedSubIndex]) {
       const sub = cur.subTabs[selectedSubIndex];
       if (hubIcon) hubIcon.textContent = sub.icon || cur.icon || '⛵';
-      if (hubText) hubText.textContent = `${cur.label} · ${sub.label}`;
-      if (hubDesc) hubDesc.textContent = `${cur.actionName || cur.label} (${sub.fullLabel})`;
+      const curLabel = typeof cur.label === 'function' ? cur.label() : cur.label;
+      if (hubText) hubText.textContent = `${curLabel} · ${sub.label}`;
+      if (hubDesc) hubDesc.textContent = `${sub.fullLabel}${sub.isEquipped ? ' · [EQUIPADA]' : ' · Clique para equipar'}`;
     } else {
       if (hubIcon) hubIcon.textContent = cur.icon || '⚓';
-      if (hubText) hubText.textContent = cur.label || 'ORDEM';
-      if (hubDesc) hubDesc.textContent = cur.subTabs ? `${cur.desc} · (Puxe para fora para vela específica)` : (cur.desc || '');
+      const curLabel = typeof cur.label === 'function' ? cur.label() : cur.label;
+      if (hubText) hubText.textContent = curLabel || 'ORDEM';
+      const curDesc = typeof cur.desc === 'function' ? cur.desc() : cur.desc;
+      if (hubDesc) {
+        if (cur.disabled) {
+          hubDesc.textContent = curDesc || 'Desativado na Câmera Livre (entre em FPV para usar)';
+        } else if (cur.subRingMode === 'fullCircle') {
+          hubDesc.textContent = curDesc || 'Puxe para fora para selecionar uma das 10 varas';
+        } else {
+          hubDesc.textContent = cur.subTabs ? `${curDesc} · (Puxe para fora para opções)` : (curDesc || '');
+        }
+      }
     }
   } else {
     const parentMenu = menu.parent;
@@ -669,6 +868,22 @@ function renderRadialMenu() {
 }
 
 function executeItem(item, subIndex = -1) {
+  if (item.disabled) {
+    if (item.id === 'fishing_rod') {
+      showOrderToast('🎣 Vara de pesca desativada na Câmera Livre (mude para FPV com V)');
+    } else if (item.id === 'lantern') {
+      showOrderToast('💡 Lanterna desativada na Câmera Livre (mude para FPV com V)');
+    } else if (item.id === 'spyglass') {
+      showOrderToast('🔭 Luneta desativada na Câmera Livre (mude para FPV com V)');
+    } else if (item.id === 'bestiary') {
+      showOrderToast('📖 Bestiário desativado por hora!');
+    } else {
+      showOrderToast('Item desativado na Câmera Livre (mude para FPV com V)');
+    }
+    closeRadialMenu();
+    return;
+  }
+
   if (item.target) {
     activeMenu = item.target;
     selectedIndex = -1;
@@ -700,6 +915,77 @@ function executeItem(item, subIndex = -1) {
     return;
   }
 
+  if (item.subType === 'rod_select' || item.id === 'fishing_rod') {
+    if (!CAM.fpv) {
+      showOrderToast('🎣 Vara de pesca desativada na Câmera Livre (mude para FPV com V)');
+      closeRadialMenu();
+      return;
+    }
+    if (!fishingSystem) {
+      closeRadialMenu();
+      return;
+    }
+
+    if (subIndex >= 0 && item.subTabs && item.subTabs[subIndex]) {
+      const targetIdx = item.subTabs[subIndex].rodIdx ?? subIndex;
+      const rodData = RODS[targetIdx] || RODS[0];
+      const capVal = CAP[targetIdx] || 1.5;
+      const capStr = capVal >= 1000 ? '1 t' : `${capVal} kg`;
+
+      if (fishingSystem.equipped && fishingSystem.currentRodIdx === targetIdx) {
+        fishingSystem.unequip();
+        showOrderToast(`🎣 ${rodData.n} guardada!`);
+      } else {
+        fishingSystem.equipRod(targetIdx);
+        showOrderToast(`🎣 ${rodData.n} equipada (até ${capStr})!`);
+      }
+      closeRadialMenu();
+      return;
+    }
+
+    // Clique direto na fatia central (subIndex === -1)
+    const lastIdx = (typeof fishingSystem.currentRodIdx === 'number') ? fishingSystem.currentRodIdx : 0;
+    const rodData = RODS[lastIdx] || RODS[0];
+    if (fishingSystem.equipped) {
+      fishingSystem.unequip();
+      showOrderToast(`🎣 ${rodData.n} guardada!`);
+    } else {
+      fishingSystem.equipRod(lastIdx);
+      showOrderToast(`🎣 ${rodData.n} equipada!`);
+    }
+    closeRadialMenu();
+    return;
+  }
+
+  if (item.subType === 'lantern_equip' || item.id === 'lantern') {
+    if (!CAM.fpv) {
+      showOrderToast('💡 Lanterna desativada na Câmera Livre (mude para FPV com V)');
+      closeRadialMenu();
+      return;
+    }
+    if (!playerEquipment) {
+      closeRadialMenu();
+      return;
+    }
+    if (subIndex >= 0 && item.subTabs && item.subTabs[subIndex]) {
+      const mode = item.subTabs[subIndex].id;
+      playerEquipment.setLanternMode(mode);
+      if (mode === 'hand') {
+        showOrderToast('🖐️ Lanterna empunhada na mão esquerda!');
+      } else {
+        showOrderToast('🪢 Lanterna guardada no cinto!');
+      }
+      closeRadialMenu();
+      return;
+    }
+
+    // Clique direto na fatia central (subIndex === -1)
+    playerEquipment.toggleLanternPower();
+    showOrderToast(playerEquipment.lanternOn ? '💡 Lanterna acesa!' : '💡 Lanterna apagada!');
+    closeRadialMenu();
+    return;
+  }
+
   if (item.action) {
     item.action();
   }
@@ -713,8 +999,10 @@ export function updateRadialSelectionByDirection(dx, dy) {
   if (!total) return;
 
   const dist = Math.hypot(dx, dy);
+  const isJoy = rjoy.id >= 0;
+  const deadZone = isJoy ? 0.20 : 38;
 
-  if (dist < 0.12 && Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+  if (dist < deadZone && Math.abs(dx) < 8 && Math.abs(dy) < 8) {
     if (selectedIndex !== -1 || selectedSubIndex !== -1) {
       selectedIndex = -1;
       selectedSubIndex = -1;
@@ -724,10 +1012,38 @@ export function updateRadialSelectionByDirection(dx, dy) {
   }
 
   const targetAngle = Math.atan2(dy, dx);
+  const step = (2 * Math.PI) / total;
+
+  const wheel = document.getElementById('radial-wheel');
+  const wheelWidth = wheel ? wheel.getBoundingClientRect().width : 320;
+  const svgDist = isJoy ? (dist * 200) : (dist / (wheelWidth / 400));
+  const isOuter = isJoy ? (dist > 0.60) : (svgDist > 138);
+
+  const curItem = (selectedIndex >= 0 && items[selectedIndex]) ? items[selectedIndex] : null;
+
+  // Se já estávamos sobre um item de anel circular completo (ex: vara de pesca) e o ponteiro foi para fora
+  if (isOuter && curItem && !curItem.disabled && curItem.subRingMode === 'fullCircle' && curItem.subTabs && curItem.subTabs.length) {
+    const subCount = curItem.subTabs.length;
+    const subStep = (2 * Math.PI) / subCount;
+    const baseStartAngle = -Math.PI / 2 - (subStep / 2);
+    let rel = targetAngle - baseStartAngle;
+    while (rel < 0) rel += 2 * Math.PI;
+    while (rel >= 2 * Math.PI) rel -= 2 * Math.PI;
+    let bestSubIndex = Math.floor(rel / subStep);
+    if (bestSubIndex < 0) bestSubIndex = 0;
+    if (bestSubIndex >= subCount) bestSubIndex = subCount - 1;
+
+    if (selectedSubIndex !== bestSubIndex) {
+      selectedSubIndex = bestSubIndex;
+      renderRadialMenu();
+    }
+    return;
+  }
+
+  // Caso contrário, calcula a melhor fatia central
   let bestIndex = 0;
   let minDiff = Infinity;
 
-  const step = (2 * Math.PI) / total;
   items.forEach((_, i) => {
     const itemAngle = (i * step) - (Math.PI / 2);
     const diff = Math.abs(wrapAngle(targetAngle - itemAngle));
@@ -739,17 +1055,28 @@ export function updateRadialSelectionByDirection(dx, dy) {
 
   let bestSubIndex = -1;
   const activeItem = items[bestIndex];
-  if (activeItem && activeItem.subTabs && activeItem.subTabs.length) {
-    const isOuter = dist > 0.62 || dist > 135;
+  if (activeItem && !activeItem.disabled && activeItem.subTabs && activeItem.subTabs.length) {
     if (isOuter) {
-      const centerAngle = (bestIndex * step) - (Math.PI / 2);
-      const a1 = centerAngle - (step / 2);
-      let rel = wrapAngle(targetAngle - a1);
-      if (rel < 0) rel += 2 * Math.PI;
-      const subStep = step / activeItem.subTabs.length;
-      bestSubIndex = Math.floor(rel / subStep);
-      if (bestSubIndex < 0) bestSubIndex = 0;
-      if (bestSubIndex >= activeItem.subTabs.length) bestSubIndex = activeItem.subTabs.length - 1;
+      if (activeItem.subRingMode === 'fullCircle') {
+        const subCount = activeItem.subTabs.length;
+        const subStep = (2 * Math.PI) / subCount;
+        const baseStartAngle = -Math.PI / 2 - (subStep / 2);
+        let rel = targetAngle - baseStartAngle;
+        while (rel < 0) rel += 2 * Math.PI;
+        while (rel >= 2 * Math.PI) rel -= 2 * Math.PI;
+        bestSubIndex = Math.floor(rel / subStep);
+        if (bestSubIndex < 0) bestSubIndex = 0;
+        if (bestSubIndex >= subCount) bestSubIndex = subCount - 1;
+      } else {
+        const centerAngle = (bestIndex * step) - (Math.PI / 2);
+        const a1 = centerAngle - (step / 2);
+        let rel = wrapAngle(targetAngle - a1);
+        if (rel < 0) rel += 2 * Math.PI;
+        const subStep = step / activeItem.subTabs.length;
+        bestSubIndex = Math.floor(rel / subStep);
+        if (bestSubIndex < 0) bestSubIndex = 0;
+        if (bestSubIndex >= activeItem.subTabs.length) bestSubIndex = activeItem.subTabs.length - 1;
+      }
     }
   }
 

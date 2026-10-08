@@ -13,6 +13,7 @@ export const HM = { a: 0, t: 0 };
 export const AN = { d: 1, t: 1, set: 1, ax: 0, az: 5, up: 0, wnow: 0, hold: 0 };
 export const PL = { m: 'ship', vy: 0, air: false, wet: false, s: 1, cy: 0, vx: 0, vz: 0, wx: 0, wz: 0, y: 0, ladder: null };
 export const fp = { x: 0, y: .35, z: .9, yaw: Math.PI, pit: 0 };
+export const REF = { x: 0, z: 0 };
 export const keys = {};
 export const joy = { id: -1, x0: 0, y0: 0, dx: 0, dy: 0 };
 export const lk = { id: -1, x: 0, y: 0 };

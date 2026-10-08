@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { clamp, wrapA, D2 } from '../core/math.js';
 import { GC } from '../core/palettes.js';
 import { sc, cam, cv } from '../core/renderer.js';
-import { ST, INT, PL, CAM, AN, HM, fp, keys, joy, lk, GAME } from '../core/state.js';
+import { ST, INT, PL, CAM, AN, HM, fp, keys, joy, lk, GAME, REF } from '../core/state.js';
 import { H } from '../world/ocean.js';
 import { ILHAS } from '../world/archipelago.js';
 import { SH } from './ship.js';
@@ -379,8 +379,10 @@ export function toWorld() {
   SH.ship.updateMatrixWorld(true);
   _v.set(fp.x, fp.y, fp.z);
   SH.ship.localToWorld(_v);
-  PL.wx = ST.px + _v.x;
-  PL.wz = ST.pz + _v.z;
+  const curRefX = REF ? REF.x : ST.px;
+  const curRefZ = REF ? REF.z : ST.pz;
+  PL.wx = curRefX + _v.x;
+  PL.wz = curRefZ + _v.z;
   PL.y = _v.y;
 }
 
@@ -407,9 +409,11 @@ export function startClimb(ladObj, fromWater) {
   PL.vy = 0;
   PL.wet = false;
   INT.grab = null;
+  const curRefX = REF ? REF.x : ST.px;
+  const curRefZ = REF ? REF.z : ST.pz;
   if (fromWater) {
     sh.updateMatrixWorld(true);
-    _v.set(PL.wx - ST.px, Math.max(PL.y + 1.65, H(PL.wx, PL.wz) + .15), PL.wz - ST.pz);
+    _v.set(PL.wx - curRefX, Math.max(PL.y + 1.65, H(PL.wx, PL.wz) + .15), PL.wz - curRefZ);
     sh.worldToLocal(_v);
     PL.cy = clamp(_v.y - .65, ladObj.botY, ladObj.topY - .2);
   } else {
@@ -514,7 +518,9 @@ export function updSwim(dt) {
   }
 
   // Casco sólido e escadas: o nadador não atravessa
-  _v.set(PL.wx - ST.px, PL.y + 1.6, PL.wz - ST.pz);
+  const curRefX = REF ? REF.x : ST.px;
+  const curRefZ = REF ? REF.z : ST.pz;
+  _v.set(PL.wx - curRefX, PL.y + 1.6, PL.wz - curRefZ);
   sh.worldToLocal(_v);
   const lz = _v.z, ly = _v.y;
   if (lz > -6.4 && lz < 6.1) {
@@ -537,15 +543,15 @@ export function updSwim(dt) {
     if (Math.abs(_v.x) < hwd) {
       _v.x = (_v.x < 0 ? -1 : 1) * hwd;
       sh.localToWorld(_v);
-      PL.wx = ST.px + _v.x;
-      PL.wz = ST.pz + _v.z;
+      PL.wx = curRefX + _v.x;
+      PL.wz = curRefZ + _v.z;
     }
   }
 
   // Escada ao alcance?
   const ey = Math.max(PL.y + 1.65, hw + .15);
   let nearLad = null;
-  _v.set(PL.wx - ST.px, ey, PL.wz - ST.pz);
+  _v.set(PL.wx - curRefX, ey, PL.wz - curRefZ);
   sh.worldToLocal(_v);
   if (PL.wet && Math.abs(_v.z - 2.1) < .85 && _v.y > -1.5 && _v.y < 1.5) {
     for (const lad of SH.ladders) {
@@ -563,7 +569,7 @@ export function updSwim(dt) {
     return updClimb(dt);
   }
 
-  cam.position.set(PL.wx - ST.px, PL.y + 1.65, PL.wz - ST.pz);
+  cam.position.set(PL.wx - curRefX, PL.y + 1.65, PL.wz - curRefZ);
   cam.rotation.set(fp.pit, fp.yaw, 0);
 
   const msg = nearLad

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { rnd, clamp, c3, m3 } from '../core/math.js';
 import { SKY, CLD, WH } from '../core/palettes.js';
 import { sc, cam, sky, sunL, hemi, fLight } from '../core/renderer.js';
-import { S, WI, ST, LT, FX, AN } from '../core/state.js';
+import { S, WI, ST, LT, FX, AN, REF } from '../core/state.js';
 import { H, fastH } from '../world/ocean.js';
 import { clouds, cm, cloudState, updateCloudsSystem } from '../world/clouds.js';
 import { ILHAS } from '../world/archipelago.js';
@@ -71,13 +71,15 @@ wkP.fill(0);
 for (let i = 0; i < NW; i++) wkP[i * 3 + 1] = -50;
 
 export function updExtras(dt, ch, sh) {
+  const shipRelX = ST.px - (REF ? REF.x : ST.px);
+  const shipRelZ = ST.pz - (REF ? REF.z : ST.pz);
   wkT += dt * Math.min(30, Math.abs(ST.v) * 2.2);
   while (wkT > 1) {
     wkT--;
     for (const [lx, lz] of [[0, -5.8], [-1.4, 3.8], [1.4, 3.8]]) {
       const i = wkI++ % NW;
-      wkP[i * 3] = lx * ch + lz * sh + rnd(-.4, .4);
-      wkP[i * 3 + 2] = -lx * sh + lz * ch + rnd(-.4, .4);
+      wkP[i * 3] = shipRelX + lx * ch + lz * sh + rnd(-.4, .4);
+      wkP[i * 3 + 2] = shipRelZ - lx * sh + lz * ch + rnd(-.4, .4);
       wkL[i] = 1;
     }
   }
@@ -87,7 +89,7 @@ export function updExtras(dt, ch, sh) {
     const o = i * 3;
     wkP[o] -= ST.svx * dt;
     wkP[o + 2] -= ST.svz * dt;
-    wkP[o + 1] = fastH(wkP[o] + ST.px, wkP[o + 2] + ST.pz) + .15;
+    wkP[o + 1] = fastH(wkP[o] + (REF ? REF.x : ST.px), wkP[o + 2] + (REF ? REF.z : ST.pz)) + .15;
     wkC[o] = .1 + .9 * L;
     wkC[o + 1] = .45 + .55 * L;
     wkC[o + 2] = .55 + .45 * L;
@@ -109,6 +111,8 @@ sc.add(anM);
 
 let anIdx = 0;
 export function updAnchorSplash(dt, ch, sh) {
+  const shipRelX = ST.px - (REF ? REF.x : ST.px);
+  const shipRelZ = ST.pz - (REF ? REF.z : ST.pz);
   if (AN.d > .05 && AN.d < .95 && Math.random() < .6) {
     const i = anIdx++ % ANP;
     const lx = .88 + rnd(-.3, .3), lz = 3.9 + rnd(-.3, .3);
@@ -116,9 +120,9 @@ export function updAnchorSplash(dt, ch, sh) {
     const gz = lz * ch - lx * sh + ST.pz;
     const gy = fastH(gx, gz) + rnd(.05, .3);
 
-    anP[i * 3] = gx;
+    anP[i * 3] = shipRelX + lx * ch + lz * sh;
     anP[i * 3 + 1] = gy;
-    anP[i * 3 + 2] = gz;
+    anP[i * 3 + 2] = shipRelZ + lz * ch - lx * sh;
 
     anV[i * 3] = rnd(-.8, .8);
     anV[i * 3 + 1] = rnd(1, 2.5);
@@ -134,7 +138,7 @@ export function updAnchorSplash(dt, ch, sh) {
     anP[i * 3 + 1] += anV[i * 3 + 1] * dt;
     anP[i * 3 + 2] += anV[i * 3 + 2] * dt;
 
-    if (anP[i * 3 + 1] <= fastH(anP[i * 3], anP[i * 3 + 2])) {
+    if (anP[i * 3 + 1] <= fastH(anP[i * 3] + (REF ? REF.x : ST.px), anP[i * 3 + 2] + (REF ? REF.z : ST.pz))) {
       anL[i] = 0;
       anP[i * 3 + 1] = -50;
     }
@@ -420,14 +424,18 @@ export function updBowSpray(dt, ch, sh) {
   }
 
   if (speed > .8) {
+    const shipRelX = ST.px - (REF ? REF.x : ST.px);
+    const shipRelZ = ST.pz - (REF ? REF.z : ST.pz);
     const rate = Math.min(8, Math.floor(speed * 3));
     for (let k = 0; k < rate; k++) {
       const i = bsIdx++ % BSP;
       const side = (k % 2 === 0 ? 1 : -1);
       const lx = side * rnd(.4, 1.1), ly = rnd(.2, .6), lz = 4.6 + rnd(0, .8);
-      bsP[i * 3] = lx * ch + lz * sh + ST.px;
-      bsP[i * 3 + 1] = fastH(bsP[i * 3], lz * ch - lx * sh + ST.pz) + ly;
-      bsP[i * 3 + 2] = lz * ch - lx * sh + ST.pz;
+      const worldX = lx * ch + lz * sh + ST.px;
+      const worldZ = lz * ch - lx * sh + ST.pz;
+      bsP[i * 3] = shipRelX + lx * ch + lz * sh;
+      bsP[i * 3 + 1] = fastH(worldX, worldZ) + ly;
+      bsP[i * 3 + 2] = shipRelZ + lz * ch - lx * sh;
 
       bsV[i * 3] = (side * rnd(.8, 2.2) * ch + rnd(-.4, .4)) * (speed * .25);
       bsV[i * 3 + 1] = rnd(1.8, 3.8) + speed * .15;
@@ -447,7 +455,7 @@ export function updBowSpray(dt, ch, sh) {
     bsP[i * 3 + 1] += bsV[i * 3 + 1] * dt;
     bsP[i * 3 + 2] += bsV[i * 3 + 2] * dt;
 
-    if (bsP[i * 3 + 1] <= fastH(bsP[i * 3], bsP[i * 3 + 2])) {
+    if (bsP[i * 3 + 1] <= fastH(bsP[i * 3] + (REF ? REF.x : ST.px), bsP[i * 3 + 2] + (REF ? REF.z : ST.pz))) {
       bsL[i] = 0;
       bsP[i * 3 + 1] = -50;
     }
@@ -556,7 +564,7 @@ export function getCelestialFrame(time) {
   return { sky: skyVal, fog: fogVal, light: lightVal, lightInt, isMoon, hemiS, hemiG, hemiInt, fogDens };
 }
 
-export function updSun(dt) {
+export function updSun(dt, refX = (REF ? REF.x : ST.px), refZ = (REF ? REF.z : ST.pz)) {
   const celestial = getCelestialFrame(S.time);
   const occ = cloudState.sunOcclusion;
 
@@ -583,12 +591,12 @@ export function updSun(dt) {
   }
 
   const sunDist = 90;
-  const sunX = ST.px - Math.cos(angle) * sunDist;
+  const sunX = (ST.px - refX) - Math.cos(angle) * sunDist;
   const sunY = Math.sin(angle) * maxAltitude;
-  const sunZ = ST.pz - 50;
+  const sunZ = (ST.pz - refZ) - 50;
 
   sunL.position.set(sunX, Math.max(5, sunY), sunZ);
-  sunL.target.position.set(ST.px, 0, ST.pz);
+  sunL.target.position.set(ST.px - refX, 0, ST.pz - refZ);
   sunL.target.updateMatrixWorld();
 
   if (!sunG.visible) return;

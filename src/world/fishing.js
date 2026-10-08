@@ -146,6 +146,12 @@ export class FishingSystem {
     this.my = 0;
     this.nibbles = 0; // Número de beliscadas da sequência
     this.nibbleCount = 0; // Quantas beliscadas já ocorreram
+    this.totalAttempts = 0; // Quantas investidas completas o peixe fará (2 a 4)
+    this.attemptCount = 0; // Investida atual
+    this.burstBites = 0; // Quantas mordidas nesta investida (1, 2 ou 3)
+    this.currentBurstBite = 0; // Mordida atual na investida
+    this.suspiciousDuration = 0; // Tempo que passa nadando desconfiado
+    this.suspiciousAngle = 0; // Ângulo de órbita desconfiada
     this.preHeld = false; // Flag para impedir segurar antes da hora
 
     // Parâmetros de Aproximação e Fuga
@@ -979,47 +985,38 @@ export class FishingSystem {
         // Timer de aproximação disparou!
         // Consistência: Sorteia um ÚNICO peixe para toda a tentativa
         this.fish = this.pickFish();
-        this.nibbles = Math.floor(rnd(2, 5.99)); // 2 a 5 beliscadas
-        this.nibbleCount = 0;
+        this.totalAttempts = Math.floor(rnd(2, 4.99)); // O peixe fará de 2 a 4 investidas antes de desistir
+        this.attemptCount = 0;
+        this.burstBites = Math.floor(rnd(1, 3.99)); // Pode dar 1, 2 ou até 3 mordidas nesta investida!
+        this.currentBurstBite = 0;
         this.attach(this.fish);
         this.state = 'approach';
-        this.approachDuration = rnd(1.8, 3.2); // Fase de investigação
+        this.approachDuration = rnd(3.2, 4.8); // Ritmo calmo e natural de aproximação
         this.timer = this.approachDuration;
         this.approachAngle = Math.random() * Math.PI * 2;
-        this.say('Um peixe está rondando a isca...', 2.0);
+        this.say('Um peixe está rondando a isca...', 2.5);
       }
     } else if (this.state === 'approach') {
       this.timer -= dt;
 
       // Animação de aproximação: o peixe investiga e nada em curva em direção ao anzol
-      const u = 1 - Math.max(0, this.timer / (this.approachDuration || 2));
+      const u = 1 - Math.max(0, this.timer / (this.approachDuration || 3));
       
-      let dist, d_dist, c_ang = 2.8;
-      if (this.nibbleCount > 0) {
-        // Nas beliscadas subsequentes, ele não some (não teletransporta)
-        // Ele continua nadando organicamente ao redor da isca (começando em 0 e voltando para 0)
-        c_ang = 4.5;
-        const maxDist = 1.2;
-        dist = 4 * u * (1 - u) * maxDist;
-        d_dist = 4 * (1 - 2 * u) * maxDist;
-      } else {
-        // Primeira aproximação (vem de longe)
-        dist = (1 - u) * 2.2;
-        d_dist = -2.2;
-      }
-
-      const ang = this.approachAngle + u * c_ang;
+      // Se for a primeira investida, vem de mais longe (2.8m). Se veio de uma recua desconfiada, vem de ~2.2m
+      const startDist = this.attemptCount === 0 ? 2.8 : 2.2;
+      const dist = (1 - u) * startDist;
+      const ang = this.approachAngle + u * 2.6;
       const offX = Math.cos(ang) * dist;
       const offZ = Math.sin(ang) * dist;
       this.hang.position.set(offX, -0.65, offZ);
 
       // Orientação orgânica na direção do deslocamento (derivada vetorial)
-      const vx = d_dist * Math.cos(ang) - dist * Math.sin(ang) * c_ang;
-      const vz = d_dist * Math.sin(ang) + dist * Math.cos(ang) * c_ang;
+      const vx = -startDist * Math.cos(ang) - dist * Math.sin(ang) * 2.6;
+      const vz = -startDist * Math.sin(ang) + dist * Math.cos(ang) * 2.6;
       this.fishYaw = Math.atan2(-vz, vx);
 
       // Pequenas ondulações discretas na superfície durante a investigação
-      if (Math.random() < dt * 1.8) {
+      if (Math.random() < dt * 1.5) {
         spawnRipple(this.to.x + offX, this.to.z + offZ, 0.4, 0.8);
       }
 
@@ -1031,17 +1028,17 @@ export class FishingSystem {
       }
 
       if (this.state === 'approach' && this.timer <= 0) {
-        // Fim da aproximação: peixe ataca a isca (inicia beliscada com o MESMO peixe)
+        // Fim da aproximação: peixe ataca a isca (inicia a mordida da investida atual)
         this.state = 'bite';
-        this.nibbleCount++;
+        this.currentBurstBite++;
         this.playSfx('bite');
         spawnRipple(this.to.x, this.to.z, 0.9, 1.4);
         spawnSplash(this.to.x, this.to.z, 6, 0.6);
         this.flick = 0.5;
         this.hang.position.set(0, -0.65, 0);
 
-        const isFirst = this.nibbleCount === 1;
-        this.timer = isFirst ? 0.45 : rnd(0.52, 0.70);
+        this.timer = rnd(0.55, 0.78); // Janela generosa e natural para fisgar
+        this.say('O peixe está mordendo!', 1.0);
       }
     } else if (this.state === 'bite') {
       this.timer -= dt;
@@ -1057,22 +1054,95 @@ export class FishingSystem {
           this.triggerEscape('Você já estava segurando!');
         }
       } else if (this.timer <= 0) {
-        if (this.nibbleCount < this.nibbles) {
-          // O mesmo peixe continua na água executando a sequência de beliscadas (2 a 5 vezes)
-          this.state = 'approach';
-          this.approachDuration = rnd(1.5, 2.3); // Intervalo de espreita entre beliscadas
-          this.timer = this.approachDuration;
-          this.approachAngle = Math.random() * Math.PI * 2;
-          this.say('O peixe beliscou e continua rondando...', 1.5);
+        // O jogador não fisgou a tempo nesta mordida.
+        // Checa se o peixe ainda tem mais mordidas nesta mesma investida (pode dar 1, 2 ou 3)
+        if (this.currentBurstBite < this.burstBites) {
+          // Dá um breve recuo de meio segundo e morde novamente na sequência
+          this.state = 'bite_pause';
+          this.timer = rnd(0.40, 0.65);
         } else {
-          // A sequência de beliscadas acabou e o jogador não fisgou: peixe vai embora calmamente
-          this.triggerEscape('O peixe desistiu!', true);
+          // Terminou a sequência de mordidas desta investida!
+          // Agora ele recua e nada desconfiado se ainda tiver investidas restantes
+          if (this.attemptCount + 1 < this.totalAttempts) {
+            this.state = 'suspicious';
+            this.suspiciousDuration = rnd(3.8, 5.8); // Nada desconfiado por 4 a 6 segundos
+            this.timer = this.suspiciousDuration;
+            this.suspiciousAngle = Math.random() * Math.PI * 2;
+            this.say('O peixe recuou e nada desconfiado...', 2.5);
+          } else {
+            // Esgotou todas as investidas sem o jogador fisgar: o peixe vai embora
+            this.triggerEscape('O peixe desconfiou e foi embora...', true);
+          }
         }
       }
 
       // Ao entrar no estado de bite, registramos se o player já estava segurando
       if (this.timer > 0 && this.hold && !this.pressed) {
         this.preHeld = true;
+      }
+    } else if (this.state === 'bite_pause') {
+      this.timer -= dt;
+
+      // Pequeno recuo de hesitação entre mordidas da mesma série
+      const u = 1 - Math.max(0, this.timer / 0.5);
+      const microDist = Math.sin(u * Math.PI) * 0.35;
+      this.hang.position.set(microDist, -0.65, 0);
+
+      if (this.pressed) {
+        this.triggerEscape('Você puxou entre as mordidas!');
+      } else if (this.hold) {
+        this.preHeld = true;
+      }
+
+      if (this.timer <= 0) {
+        // Dispara a próxima mordida da investida atual!
+        this.state = 'bite';
+        this.currentBurstBite++;
+        this.playSfx('bite');
+        spawnRipple(this.to.x, this.to.z, 0.9, 1.4);
+        spawnSplash(this.to.x, this.to.z, 6, 0.6);
+        this.flick = 0.5;
+        this.hang.position.set(0, -0.65, 0);
+
+        this.timer = rnd(0.55, 0.75);
+        this.say('O peixe mordeu de novo!', 1.0);
+      }
+    } else if (this.state === 'suspicious') {
+      this.timer -= dt;
+
+      // O peixe se afasta da isca (2.0m a 2.8m) e nada em círculos cautelosos
+      const u = 1 - Math.max(0, this.timer / (this.suspiciousDuration || 4));
+      const retreatDist = 1.2 + Math.min(1.0, u * 2.2) * 1.5; // afasta-se suavemente para 2.7m
+      const ang = this.suspiciousAngle + u * 2.4; // órbita lenta
+      const offX = Math.cos(ang) * retreatDist;
+      const offZ = Math.sin(ang) * retreatDist;
+      this.hang.position.set(offX, -0.65, offZ);
+
+      // Orientação tangencial à órbita (nadando ao redor da isca)
+      this.fishYaw = ang + Math.PI / 2;
+
+      // Ondulações esporádicas e calmas na superfície
+      if (Math.random() < dt * 1.0) {
+        spawnRipple(this.to.x + offX, this.to.z + offZ, 0.35, 0.7);
+      }
+
+      // Se o jogador puxar enquanto o peixe está observando desconfiado:
+      if (this.pressed) {
+        this.triggerEscape('Você puxou enquanto ele observava!');
+      } else if (this.hold) {
+        this.preHeld = true;
+      }
+
+      if (this.timer <= 0) {
+        // O peixe decide fazer uma nova investida!
+        this.attemptCount++;
+        this.burstBites = Math.floor(rnd(1, 3.99)); // Nova cota: pode dar 1, 2 ou 3 mordidas
+        this.currentBurstBite = 0;
+        this.state = 'approach';
+        this.approachDuration = rnd(3.0, 4.5);
+        this.timer = this.approachDuration;
+        this.approachAngle = ang;
+        this.say('O peixe voltou a se aproximar da isca...', 2.0);
       }
     } else if (this.state === 'escape') {
       this.escapeTimer += dt;
@@ -1379,7 +1449,7 @@ export class FishingSystem {
       const u = Math.min(1, this.castTimer / this.castDuration);
       this.bp.lerpVectors(this.from, this.to, u);
       this.bp.y += 4 * u * (1 - u) * (2 + this.castDist * .2);
-    } else if (this.state === 'wait' || this.state === 'approach' || this.state === 'bite' || this.state === 'escape') {
+    } else if (this.state === 'wait' || this.state === 'approach' || this.state === 'bite' || this.state === 'bite_pause' || this.state === 'suspicious' || this.state === 'escape') {
       this.bp.set(this.to.x, wy(this.to.x, this.to.z), this.to.z);
       if (this.state === 'bite') this.bp.y -= .22; // Afunda mais a boia para clareza visual
     } else if (this.state === 'reel') {
@@ -1442,7 +1512,7 @@ export class FishingSystem {
       ta = S.r ? .78 : .70;
     } else if (this.state === 'bite') {
       tb = .10;
-    } else if (this.state === 'approach') {
+    } else if (this.state === 'approach' || this.state === 'bite_pause' || this.state === 'suspicious') {
       tb = .02;
     } else if (this.state === 'escape') {
       tb = .06;
@@ -1498,7 +1568,7 @@ export class FishingSystem {
     this.setLine(
       this.state === 'reel' ? (1 - this.tension) * .8 :
       this.state === 'catch' ? Math.max(0.01, 0.04 / (1 + 2.5 * ld)) :
-      (this.state === 'wait' || this.state === 'approach' || this.state === 'bite' || this.state === 'escape') ? .5 : .1
+      (this.state === 'wait' || this.state === 'approach' || this.state === 'bite' || this.state === 'bite_pause' || this.state === 'suspicious' || this.state === 'escape') ? .5 : .1
     );
 
     // PEIXE ARTICULADO PENDURADO NO ANZOL
@@ -1510,11 +1580,11 @@ export class FishingSystem {
 
       // Posição vertical: na água o peixe fica submerso abaixo da boia, fora d'água pendurado pelo anzol
       const isCatch = this.state === 'catch';
-      const inWater = this.state === 'approach' || this.state === 'bite' || this.state === 'reel' || this.state === 'escape';
+      const inWater = this.state === 'approach' || this.state === 'bite' || this.state === 'bite_pause' || this.state === 'suspicious' || this.state === 'reel' || this.state === 'escape';
       const weightHangOffset = 0.12 * Math.min(2.0, Math.sqrt(ld));
       
       // Profundidade do anzol: -0.65 na água para não parecer colado na boia, -0.32 no ar
-      if (this.state !== 'approach' && this.state !== 'escape') {
+      if (this.state !== 'approach' && this.state !== 'suspicious' && this.state !== 'bite_pause' && this.state !== 'escape') {
         this.hang.position.set(0, inWater ? -0.65 : (-0.32 - weightHangOffset), 0);
       }
 
@@ -1543,9 +1613,12 @@ export class FishingSystem {
           swim(o, this.animProg * 7.5, 3.6, 1.8, 0);
         } else if (this.state === 'approach') {
           // Nado calmo e ondulante de investigação da isca
-          swim(o, this.animProg * 2.8, 1.1, 0.65, 0.15);
-        } else if (this.state === 'bite') {
-          // Ataque agressivo na isca
+          swim(o, this.animProg * 2.4, 0.95, 0.55, 0.12);
+        } else if (this.state === 'suspicious') {
+          // Nado desconfiado: cauda lenta e cautelosa, ondulando em círculos
+          swim(o, this.animProg * 1.5, 0.65, 0.40, 0.08);
+        } else if (this.state === 'bite' || this.state === 'bite_pause') {
+          // Ataque e mordiscada rápida
           swim(o, this.animProg * 5.0, 2.0, 1.0, 0);
         } else if (isRunning) {
           // Arrancada violenta: batimentos vigorosos de cauda e cabeça
@@ -1617,6 +1690,8 @@ export class FishingSystem {
       wait: 'Aguardando peixe se aproximar… (clique para recolher)',
       approach: 'Um peixe está rondando a isca! Fique atento…',
       bite: '❗ MORDIDA! FISGUE AGORA!',
+      bite_pause: 'O peixe está mordiscando a isca…',
+      suspicious: 'O peixe recuou e nada desconfiado… Aguarde ele voltar',
       escape: this.escapeReason || 'O peixe se assustou e fugiu!',
       reel: q ? fh() : 'Recolhendo…',
       catch: q ? `${q.nw ? '✨ Nova espécie! ' : ''}${q.n} (${q.l}) · ${fmtWeight(q.w)} · Clique para guardar na mochila` : ''
@@ -1675,9 +1750,18 @@ export class FishingSystem {
       } else if (this.state === 'wait') {
         this.ui.btnIcon.textContent = '🌊';
         this.ui.btnLabel.textContent = 'AGUARDE';
+      } else if (this.state === 'approach' || this.state === 'bite_pause') {
+        this.ui.btnIcon.textContent = '👀';
+        this.ui.btnLabel.textContent = 'ATENTO';
       } else if (this.state === 'bite') {
         this.ui.btnIcon.textContent = '❗';
         this.ui.btnLabel.textContent = 'FISGAR!';
+      } else if (this.state === 'suspicious') {
+        this.ui.btnIcon.textContent = '🤨';
+        this.ui.btnLabel.textContent = 'DESCONFIADO';
+      } else if (this.state === 'escape') {
+        this.ui.btnIcon.textContent = '💨';
+        this.ui.btnLabel.textContent = 'FUGIU';
       } else if (this.state === 'reel') {
         this.ui.btnIcon.textContent = '🔄';
         this.ui.btnLabel.textContent = 'RECOLHER';

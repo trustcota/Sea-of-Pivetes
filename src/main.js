@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { clamp, wrapA } from './core/math.js';
 import { R, sc, cam, cv } from './core/renderer.js';
-import { S, WI, ST, SEAS, CAM, UIS, FX, FL, AN, INT, fp, keys, joy, lk, GAME, PL } from './core/state.js';
+import { S, WI, ST, SEAS, CAM, UIS, FX, FL, AN, INT, fp, keys, joy, lk, GAME, PL, REF } from './core/state.js';
 import { setWaveDir, H, updSea } from './world/ocean.js';
 import { ILHAS } from './world/archipelago.js';
 import { updExtras, updSpeedFx, vn, updSun, updAtmosphere, updSplashes, updRipples, updLineWakes } from './world/weather.js';
@@ -12,6 +12,7 @@ import { setupUI, updWindHud, updAnchor, updateFpsVisibility } from './ui.js';
 import { isRadialMenuOpen, updateRadialSelectionByDirection, executeSelectedRadialAction } from './radialMenu.js';
 import { fishManager } from './world/fish.js';
 import { fishingSystem } from './world/fishing.js';
+import { playerEquipment } from './ship/playerEquipment.js';
 import { bestiaryModal } from './ui/BestiaryModal.js';
 import { Audio } from './core/audio.js';
 import './pwa.js';
@@ -310,12 +311,21 @@ function loop(now) {
   const avx = vwx - ST.svx, avz = vwz - ST.svz;
   FL.a += wrapA(Math.atan2(-ax, -az) - FL.a) * (1 - Math.exp(-dt * 3));
 
+  // Determinação do Ponto de Foco (Floating Origin dinâmico estilo Sea of Thieves)
+  // No convés do navio, menus e transições: o foco é o Galeão (ST.px, ST.pz)
+  // Ao nadar ou explorar ilhas a pé (PL.m === 'swim'): o foco do mundo é o Jogador (PL.wx, PL.wz)
+  const isExploringOnFoot = GAME.state === 'PLAY' && CAM.fpv && PL.m === 'swim';
+  const refX = isExploringOnFoot ? PL.wx : ST.px;
+  const refZ = isExploringOnFoot ? PL.wz : ST.pz;
+  REF.x = refX;
+  REF.z = refZ;
+
   updGlow(dt, now);
   updGlowHelm(dt, now);
   updExtras(dt, Math.cos(ST.hd), Math.sin(ST.hd));
   updSpeedFx(dt);
   updAnchor(dt);
-  updSun(dt);
+  updSun(dt, refX, refZ);
   updSplashes(dt);
   updRipples(dt);
   updLineWakes(dt);
@@ -325,14 +335,14 @@ function loop(now) {
   [vy, vyv] = so2(vy, vyv, (hb + hs + hp + ht + hw0) / 5 + .4, 1.6, .6, dt);
   [pt, ptv] = so2(pt, ptv, -Math.atan((hb - hs) / 10) * .45, 1.4, .5, dt);
   [rl, rlv] = so2(rl, rlv, Math.atan((ht - hp) / 4.4) * .28, 1.26, .4, dt);
-  ship.position.y = vy;
+  ship.position.set(ST.px - refX, vy, ST.pz - refZ);
   ship.rotation.set(pt, ST.hd, rl + ST.heel);
   ST.vy = vy;
   ST.pt = pt;
   ST.rl = rl;
   fl.rotation.y = FL.a + Math.sin(SEAS.wt * 3) * (.12 + .2 * clamp(WI.wsp / 14, 0, 1));
 
-  updSea(sw);
+  updSea(sw, refX, refZ);
 
   // Câmera FPV, Orbital ou Transição
   if (GAME.state === 'MENU') {
@@ -411,10 +421,10 @@ function loop(now) {
     }
   }
 
-  // Efeito FOV de velocidade
-  const f = 60 + 13 * FX.SPD * FX.SPD;
-  if (Math.abs(cam.fov - f) > .05) {
-    cam.fov = f;
+  // Efeito FOV de velocidade e Luneta
+  const targetFov = playerEquipment.isSpyglassActive() ? 14 : (60 + 13 * FX.SPD * FX.SPD);
+  if (Math.abs(cam.fov - targetFov) > .05) {
+    cam.fov += (targetFov - cam.fov) * Math.min(1, dt * 9);
     cam.updateProjectionMatrix();
   }
 
@@ -427,9 +437,10 @@ function loop(now) {
     btn.forEach((b, i) => b.classList.toggle('on', i === mi));
   }
 
-  ILHAS.update(ST.px, ST.pz, dt);
-  fishManager.update(dt, now, ST.px, ST.pz);
+  ILHAS.update(refX, refZ, dt);
+  fishManager.update(dt, now, refX, refZ);
   fishingSystem.update(dt, now);
+  playerEquipment.update(dt, now);
   mapTick(dt);
   R.render(sc, cam);
 }
@@ -464,6 +475,7 @@ ILHAS.prime();
 window.bestiaryModal = bestiaryModal;
 bestiaryModal.init();
 fishingSystem.init();
+playerEquipment.init();
 fishManager.spawnEcosystem(s0.x, s0.z);
 
 requestAnimationFrame(loop);

@@ -68,7 +68,7 @@ const HULL_B = [-0.8, -1.1, -1.3, -1.35, -1.35, -1.3, -1.2, -1.0, -0.7, -0.3, 0.
 
 const activeShadows = [];
 
-export function updSea(s) {
+export function updSea(s, refX = ST.px, refZ = ST.pz) {
   const vd = ILHAS && ILHAS.vd ? ILHAS.vd() : 2;
   const cs = ILHAS && ILHAS.CS ? ILHAS.CS : 48;
   const targetRadius = (vd + 2.5) * cs;
@@ -85,9 +85,13 @@ export function updSea(s) {
   const sinRoll = Math.sin(shipRoll);
   const shipSpeed = Math.abs(ST.v || 0);
 
+  // Posição relativa do navio em relação ao centro focal da malha do oceano
+  const shipRelX = ST.px - refX;
+  const shipRelZ = ST.pz - refZ;
+
   for (let i = 0, n = 0; i < NV; i++) {
     const sx = bx[i] * scale, sz = bz[i] * scale;
-    const x = sx + ST.px, z = sz + ST.pz;
+    const x = sx + refX, z = sz + refZ;
     let y = SEAS.chop * Math.sin(x * .8 + SEAS.wt * 1.9) * Math.cos(z * .7 - SEAS.wt * 1.5), ox = 0, oz = 0;
     for (const w of WV) {
       const p = w.k * (w.dx * x + w.dz * z) - w.o, A = SEAS.amp * w.f;
@@ -109,9 +113,11 @@ export function updSea(s) {
     // Depressão suave da água dentro do casco do barco
     const rx = sx + ox;
     const rz = sz + oz;
-    if (Math.abs(rx) < 8.0 && Math.abs(rz) < 8.0) {
-      const lx = rx * ch - rz * sh;
-      const lz = rx * sh + rz * ch;
+    const dxShip = rx - shipRelX;
+    const dzShip = rz - shipRelZ;
+    if (Math.abs(dxShip) < 8.0 && Math.abs(dzShip) < 8.0) {
+      const lx = dxShip * ch - dzShip * sh;
+      const lz = dxShip * sh + dzShip * ch;
 
       if (lz >= -6.2 && lz <= 6.2 && Math.abs(lx) < 2.4) {
         const f = (lz + 6.0) / 1.2;
@@ -160,9 +166,9 @@ export function updSea(s) {
 
   let sunDirX = -0.5, sunDirY = 0.7, sunDirZ = -0.5;
   if (sunL && sunL.position) {
-    const dx = sunL.position.x - ST.px;
+    const dx = sunL.position.x - shipRelX;
     const dy = sunL.position.y;
-    const dz = sunL.position.z - ST.pz;
+    const dz = sunL.position.z - shipRelZ;
     const sl = Math.hypot(dx, dy, dz) || 1;
     sunDirX = dx / sl;
     sunDirY = dy / sl;
